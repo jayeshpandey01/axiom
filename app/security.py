@@ -67,13 +67,19 @@ def authenticate(
         authorization = f"Bearer {auth_credentials.credentials}" if auth_credentials else None
         return _oidc_principal(authorization)
     if settings.auth_mode == "api_key" and settings.app_env.lower() != "production":
-        provided_key = x_api_key or (auth_credentials.credentials if auth_credentials else None)
-        if provided_key:
-            return _api_key_principal(provided_key)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key required (pass via X-API-Key header or Bearer token)",
-        )
+        keys = [k for k in (x_api_key, auth_credentials.credentials if auth_credentials else None) if k]
+        if not keys:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="API key required (pass via X-API-Key header or Bearer token)",
+            )
+        for key in keys:
+            if secrets.compare_digest(key, settings.admin_api_key):
+                return Principal(role="admin", subject="local-admin")
+        for key in keys:
+            if secrets.compare_digest(key, settings.api_key):
+                return Principal(role="operator", subject="local-operator")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid API key")
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication is not configured")
 
 
