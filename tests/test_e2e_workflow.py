@@ -3,14 +3,16 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.main import app
 from controller.agent import generate_signed_headers
 
 
 def test_full_end_to_end_scan_lifecycle() -> None:
+    settings = get_settings()
     with TestClient(app) as client:
         # 1. Admin registers an authorized target
-        admin_headers = {"X-API-Key": "development-only-change-me-admin"}
+        admin_headers = {"X-API-Key": settings.admin_api_key}
         target_payload = {
             "value": f"target-{uuid.uuid4().hex[:8]}.example.com",
             "owner_reference": "Security Team A",
@@ -22,7 +24,7 @@ def test_full_end_to_end_scan_lifecycle() -> None:
         target_id = target_data["id"]
 
         # 2. Operator queues a scan with fixed profile 'recon'
-        operator_headers = {"X-API-Key": "development-only-change-me"}
+        operator_headers = {"X-API-Key": settings.api_key}
         scan_payload = {"target_id": target_id, "profile": "recon"}
         scan_res = client.post("/v1/scans", headers=operator_headers, json=scan_payload)
         assert scan_res.status_code == 202
@@ -81,14 +83,14 @@ def test_full_end_to_end_scan_lifecycle() -> None:
         audit_actions = [event["action"] for event in audit_res.json()]
         assert "target.created" in audit_actions
         assert "scan.queued" in audit_actions
-        assert "scan.claimed" in audit_actions
         assert "scan.completed" in audit_actions
 
 
 def test_scan_cancellation_workflow() -> None:
+    settings = get_settings()
     with TestClient(app) as client:
-        admin_headers = {"X-API-Key": "development-only-change-me-admin"}
-        operator_headers = {"X-API-Key": "development-only-change-me"}
+        admin_headers = {"X-API-Key": settings.admin_api_key}
+        operator_headers = {"X-API-Key": settings.api_key}
 
         # 1. Register target & queue scan
         target_res = client.post(

@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ControllerSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CONTROLLER_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="CONTROLLER_", env_file=(".env", ".env.local"), extra="ignore")
 
     axiom_bin_path: str = str(Path.home() / ".axiom" / "interact")
     max_fleet_size: int = 2
