@@ -25,10 +25,11 @@ class VulnerabilityAnalyzer:
             logs: str | None = None,
         ):
             nonlocal finding_id_counter
+            log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
             findings.append({
                 "id": f"SEC-{finding_id_counter:03d}",
                 "code": code,
-                "logs": logs or "",
+                "logs": log_entry,
                 "severity": severity.upper(),
                 "title": title,
                 "description": description,
@@ -260,10 +261,11 @@ class PortScanAnalyzer:
 
         def add_finding(code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None) -> None:
             nonlocal finding_id_counter
+            log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
             findings.append({
                 "id": f"SEC-{finding_id_counter:03d}",
                 "code": code,
-                "logs": logs or "",
+                "logs": log_entry,
                 "severity": severity.upper(),
                 "title": title,
                 "description": description,
@@ -399,10 +401,11 @@ class ContentDiscoveryAnalyzer:
 
         def add_finding(code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None) -> None:
             nonlocal finding_id_counter
+            log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
             findings.append({
                 "id": f"SEC-{finding_id_counter:03d}",
                 "code": code,
-                "logs": logs or "",
+                "logs": log_entry,
                 "severity": severity.upper(),
                 "title": title,
                 "description": description,
