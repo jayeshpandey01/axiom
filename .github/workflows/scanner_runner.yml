@@ -27,16 +27,13 @@ jobs:
           python-version: "3.12"
           cache: 'pip'
 
-      - name: Set up Go (for httpx)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: true
-
       - name: Install ProjectDiscovery httpx binary
         run: |
-          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-          echo "$HOME/go/bin" >> $GITHUB_PATH
+          curl -sL https://github.com/projectdiscovery/httpx/releases/download/v1.6.9/httpx_1.6.9_linux_amd64.zip -o httpx.zip
+          unzip -q -o httpx.zip httpx
+          chmod +x httpx
+          sudo mv httpx /usr/local/bin/
+          httpx -version
 
       - name: Install Dependencies
         run: |

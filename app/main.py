@@ -1,11 +1,12 @@
 from contextlib import asynccontextmanager
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.controller_auth import require_controller
 from app.db import get_db
+from app.github_dispatcher import trigger_cloud_scanner_if_needed
 from app.models import AuditEvent, ScanJob, ScanResult
 from app.rate_limit import enforce_rate_limit
 from app.result_storage import persist_completed_result
@@ -60,6 +61,7 @@ def post_target(payload: TargetCreate, principal: Principal = Depends(enforce_ra
 @app.post("/v1/scans", response_model=ScanRead, status_code=status.HTTP_202_ACCEPTED)
 def post_scan(
     payload: ScanCreate,
+    background_tasks: BackgroundTasks,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     principal: Principal = Depends(enforce_rate_limit),
     db: Session = Depends(get_db),
@@ -67,6 +69,7 @@ def post_scan(
     try:
         scan = queue_scan(db, payload, idempotency_key)
         record_audit(db, actor_role=principal.role, action="scan.queued", resource_type="scan", resource_id=str(scan.id))
+        background_tasks.add_task(trigger_cloud_scanner_if_needed)
         return scan
     except LookupError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error

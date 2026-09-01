@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     controller_shared_secret: str = "development-only-change-me"
     max_targets_per_scan: int = 10
     log_level: str = "INFO"
+    github_token: str | None = None
+    github_repo_owner: str = "jayeshpandey01"
+    github_repo_name: str = "axiom"
+    github_workflow_id: str = "scanner_runner.yml"
+    github_ref: str = "main"
 
     def validate_production(self) -> None:
         if self.app_env.lower() != "production":
