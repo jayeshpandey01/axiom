@@ -92,8 +92,24 @@ def post_cancel(scan_id: UUID, principal: Principal = Depends(enforce_rate_limit
 
 @app.get("/v1/scans/{scan_id}/result", response_model=ScanResultRead)
 def get_result(scan_id: UUID, _: Principal = Depends(enforce_rate_limit), db: Session = Depends(get_db)) -> ScanResultRead:
+    scan = db.get(ScanJob, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="scan not found")
+
+    if scan.status == "failed":
+        return ScanResultRead(
+            id=scan.id,
+            scan_job_id=scan.id,
+            summary={"status": "failed"},
+            created_at=scan.updated_at,
+            artifact=None,
+            error_logs=scan.failure_reason
+        )
+
     result = db.query(ScanResult).filter(ScanResult.scan_job_id == scan_id).first()
     if result is None:
+        if scan.status in ("queued", "dispatching", "running"):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="scan is still processing")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="scan result not found")
     return result
 

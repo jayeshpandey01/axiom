@@ -78,6 +78,7 @@ class ScanResultRead(BaseModel):
     summary: dict
     created_at: datetime
     artifact: ArtifactRead | None
+    error_logs: str | None = None
 
     model_config = {"from_attributes": True}
 
