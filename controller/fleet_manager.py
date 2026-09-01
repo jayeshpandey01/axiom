@@ -29,6 +29,30 @@ class FleetManager:
         self.work_dir = Path(settings.work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
+    def _resolve_scanner_binary(self) -> str:
+        """Locate ProjectDiscovery httpx binary for standalone direct execution."""
+        candidates = [
+            "/usr/local/bin/httpx",
+            "/usr/bin/httpx",
+            str(Path.home() / "go" / "bin" / "httpx"),
+            shutil.which("httpx-pd"),
+            shutil.which("httpx"),
+        ]
+        for candidate in candidates:
+            if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
+                # Verify it is not the python httpx package inside venv
+                if not candidate.endswith("/.venv/bin/httpx") and not candidate.endswith("\\.venv\\Scripts\\httpx.exe"):
+                    return candidate
+
+        system_bin = shutil.which("httpx")
+        if system_bin and ".venv" not in system_bin:
+            return system_bin
+
+        if self.dry_run:
+            return "mock-httpx"
+
+        raise FileNotFoundError("ProjectDiscovery 'httpx' binary not found at /usr/local/bin/httpx or in PATH.")
+
     def _resolve_binary(self, binary_name: str) -> str:
         """Locate Axiom binary either in configured path or system PATH."""
         custom_path = self.axiom_bin_dir / binary_name
@@ -73,39 +97,40 @@ class FleetManager:
             raise FleetError(f"Failed to execute command: {exc}") from exc
 
     def create_fleet(self, fleet_name: str, count: int = 1) -> bool:
-        """Spin up a disposable scanner fleet."""
+        """Spin up a disposable scanner fleet (or use standalone direct mode)."""
         if count > settings.max_fleet_size:
             raise ValueError(f"Requested count ({count}) exceeds maximum allowed fleet size ({settings.max_fleet_size})")
 
-        bin_path = self._resolve_binary("axiom-fleet")
-        cmd = [bin_path, fleet_name, "-i", str(count)]
-
-        # Fleet spin-up timeout: 8 minutes max
-        result = self._run_command(cmd, timeout=480)
-        if result.returncode != 0 and not self.dry_run:
-            raise FleetError(f"Failed to create fleet '{fleet_name}': {result.stderr}")
-
-        logger.info("Fleet '%s' with %d instance(s) created successfully.", fleet_name, count)
-        return True
+        try:
+            bin_path = self._resolve_binary("axiom-fleet")
+            cmd = [bin_path, fleet_name, "-i", str(count)]
+            result = self._run_command(cmd, timeout=480)
+            if result.returncode != 0 and not self.dry_run:
+                raise FleetError(f"Failed to create fleet '{fleet_name}': {result.stderr}")
+            logger.info("Fleet '%s' with %d instance(s) created successfully.", fleet_name, count)
+            return True
+        except FileNotFoundError:
+            logger.info("Axiom cloud fleet not configured; running in standalone direct engine mode.")
+            return True
 
     def destroy_fleet(self, fleet_name: str) -> bool:
         """Forcefully destroy a scanner fleet to eliminate cloud costs."""
         try:
-            bin_path = self._resolve_binary("axiom-rm")
-        except FileNotFoundError:
-            # Fallback to axiom-fleet with rm flag if axiom-rm is unavailable
-            bin_path = self._resolve_binary("axiom-fleet")
-            cmd = [bin_path, "-rm", fleet_name, "-f"]
-            result = self._run_command(cmd, timeout=120)
-            return result.returncode == 0
+            try:
+                bin_path = self._resolve_binary("axiom-rm")
+                cmd = [bin_path, fleet_name, "-f"]
+            except FileNotFoundError:
+                bin_path = self._resolve_binary("axiom-fleet")
+                cmd = [bin_path, "-rm", fleet_name, "-f"]
 
-        cmd = [bin_path, fleet_name, "-f"]
-        result = self._run_command(cmd, timeout=120)
-        if result.returncode == 0 or self.dry_run:
-            logger.info("Fleet '%s' destroyed successfully.", fleet_name)
+            result = self._run_command(cmd, timeout=120)
+            if result.returncode == 0 or self.dry_run:
+                logger.info("Fleet '%s' destroyed successfully.", fleet_name)
+                return True
+            logger.warning("Failed to destroy fleet '%s': %s", fleet_name, result.stderr)
+            return False
+        except FileNotFoundError:
             return True
-        logger.warning("Failed to destroy fleet '%s': %s", fleet_name, result.stderr)
-        return False
 
     def execute_scan(
         self,
@@ -122,18 +147,36 @@ class FleetManager:
         target_file.write_text(f"{target_value}\n", encoding="utf-8")
 
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
-        bin_path = self._resolve_binary("axiom-scan")
 
-        cmd = [
-            bin_path,
-            str(target_file),
-            "-m",
-            profile.axiom_module,
-            "--fleet",
-            fleet_name,
-            "-o",
-            str(output_file_path),
-        ] + profile.extra_flags
+        # Determine if Axiom or standalone direct scanner is used
+        use_axiom = False
+        if not self.dry_run:
+            try:
+                axiom_scan = self._resolve_binary("axiom-scan")
+                use_axiom = True
+            except FileNotFoundError:
+                use_axiom = False
+
+        if use_axiom:
+            cmd = [
+                axiom_scan,
+                str(target_file),
+                "-m",
+                profile.axiom_module,
+                "--fleet",
+                fleet_name,
+                "-o",
+                str(output_file_path),
+            ] + profile.extra_flags
+        else:
+            scanner_bin = self._resolve_scanner_binary()
+            cmd = [
+                scanner_bin,
+                "-l",
+                str(target_file),
+                "-o",
+                str(output_file_path),
+            ] + profile.extra_flags
 
         try:
             if self.dry_run:

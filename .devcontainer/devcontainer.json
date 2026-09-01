@@ -1,0 +1,66 @@
+{
+  "name": "Scan Tool — Controller Agent Dev Environment",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bullseye",
+
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.22"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "ms-python.debugpy",
+        "GitHub.copilot",
+        "eamodio.gitlens",
+        "mhutchie.git-graph"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "python.formatting.provider": "black",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        },
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.scrollback": 5000
+      }
+    }
+  },
+
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {
+      "label": "FastAPI Dev Server",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "remoteEnv": {
+    "APP_ENV": "development",
+    "AUTH_MODE": "api_key",
+    "DATABASE_URL": "sqlite:///./scan_tool.db"
+  },
+
+  "mounts": [
+    "source=${localWorkspaceFolder}/.env.local,target=/workspaces/${localWorkspaceFolderBasename}/.env.local,type=bind,consistency=cached"
+  ],
+
+  "onCreateCommand": "echo '✅ Codespace created. Run: bash .devcontainer/setup.sh'",
+
+  "waitFor": "postCreateCommand",
+
+  "containerEnv": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONUNBUFFERED": "1",
+    "GOPATH": "/home/vscode/go",
+    "PATH": "/home/vscode/go/bin:/usr/local/bin:/usr/bin:/bin"
+  }
+}
