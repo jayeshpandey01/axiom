@@ -38,3 +38,31 @@ def test_operator_cannot_register_target() -> None:
             json={"value": "example.com", "owner_reference": "customer-1", "authorization_reference": "ticket-123"},
         )
     assert response.status_code == 403
+
+
+def test_invalid_profile_rejected() -> None:
+    """An arbitrary string (e.g. injected nmap flags) must be rejected with 422."""
+    settings = get_settings()
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/scans",
+            headers={"X-API-Key": settings.api_key},
+            json={"target_id": "00000000-0000-0000-0000-000000000000", "profile": "nmap -oX /etc/passwd"},
+        )
+    assert response.status_code == 422
+
+
+def test_new_profiles_accepted_by_schema() -> None:
+    """All new profile names must pass schema validation (we only test 422 vs non-422 here;
+    the full flow is covered by test_e2e_new_profiles.py)."""
+    settings = get_settings()
+    new_profiles = ["network-portscan", "fast-portscan", "content-discovery", "vuln-assessment"]
+    with TestClient(app) as client:
+        for profile in new_profiles:
+            response = client.post(
+                "/v1/scans",
+                headers={"X-API-Key": settings.api_key},
+                json={"target_id": "00000000-0000-0000-0000-000000000000", "profile": profile},
+            )
+            # 404 (target not found) is acceptable here — it means the profile passed validation
+            assert response.status_code != 422, f"Profile '{profile}' was incorrectly rejected as invalid."

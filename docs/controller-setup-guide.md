@@ -95,3 +95,44 @@ pip install -r requirements-controller.txt
 ```bash
 python3 -m controller.test_lifecycle
 ```
+
+---
+
+## 5. Install Additional Scanner Tools
+
+The controller supports six scan profiles. Install the tools for each profile you intend to use:
+
+```bash
+# nmap (network-portscan) — usually pre-installed on Ubuntu
+sudo apt-get install -y nmap
+
+# masscan (fast-portscan) — requires raw socket capability
+sudo apt-get install -y masscan
+sudo setcap cap_net_raw+ep $(which masscan)
+
+# ffuf (content-discovery) — installed via Go
+go install github.com/ffuf/ffuf/v2@latest
+
+# nuclei (vuln-assessment) — installed via Go
+go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+
+# Update nuclei templates after install
+nuclei -update-templates
+```
+
+### Download SecLists wordlist for FFUF
+
+```bash
+mkdir -p ~/.axiom/wordlists
+wget -qO ~/.axiom/wordlists/common.txt \
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt
+```
+
+Or set a custom path:
+```bash
+# In .env.local on the controller VPS
+CONTROLLER_FFUF_WORDLIST=/path/to/your/wordlist.txt
+```
+
+> **Note:** A minimal bundled wordlist (`scripts/wordlists/common.txt`) is included in the repo for development and dry-run testing. Always use the full SecLists in production.
+

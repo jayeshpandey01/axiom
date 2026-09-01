@@ -1,0 +1,53 @@
+import json
+import os
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from dotenv import load_dotenv
+import httpx
+
+load_dotenv(".env.local")
+load_dotenv(".env")
+
+API_BASE = os.getenv("CONTROLLER_API_ENDPOINT", "https://axiom-xjkc.onrender.com").rstrip("/")
+ADMIN_KEY = os.getenv("ADMIN_API_KEY", "nBK_0V8AQVDZmC6gTpgkTn04t7Gx2IYSYiPvdT5zymU")
+OPERATOR_KEY = os.getenv("API_KEY", "Jf2T0sTy0IauJ6ELjLWAibC9-EpFo5LXwneztTBeyAU")
+TARGET = "myjunibaby.com"
+
+client = httpx.Client(timeout=30)
+
+# 1. Register target
+t_res = client.post(
+    f"{API_BASE}/v1/targets",
+    headers={"X-API-Key": ADMIN_KEY},
+    json={"value": TARGET, "owner_reference": "Juni Parenting", "authorization_reference": "AUTH-LIVE-SCAN-001"}
+)
+target_id = t_res.json()["id"]
+
+# 2. Queue scan
+s_res = client.post(
+    f"{API_BASE}/v1/scans",
+    headers={"X-API-Key": OPERATOR_KEY},
+    json={"target_id": target_id, "profile": "recon"}
+)
+scan_id = s_res.json()["id"]
+print(f"[+] Scan queued for {TARGET} with ID: {scan_id}")
+
+# 3. Process with real Go httpx engine
+from controller.agent import ControllerAgent
+agent = ControllerAgent()
+agent.run_batch(max_idle_sec=6, poll_interval_sec=2)
+
+# 4. Fetch the real live result
+r_res = client.get(
+    f"{API_BASE}/v1/scans/{scan_id}/result",
+    headers={"X-API-Key": OPERATOR_KEY}
+)
+result = r_res.json()
+print("\n" + "=" * 65)
+print(f"       REAL LIVE VULNERABILITY & SCAN REPORT: {TARGET}")
+print("=" * 65)
+print(json.dumps(result.get("summary", {}), indent=2))
+print("=" * 65)

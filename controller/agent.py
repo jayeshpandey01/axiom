@@ -9,12 +9,13 @@ import json
 import logging
 import secrets
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from controller.analyzer import VulnerabilityAnalyzer
+from controller.analyzer import ContentDiscoveryAnalyzer, NucleiAnalyzer, PortScanAnalyzer, VulnerabilityAnalyzer
 from controller.config import settings
 from controller.fleet_manager import FleetManager
 
@@ -67,6 +68,181 @@ def parse_httpx_output(output_file: Path) -> dict[str, Any]:
 
     analyzer = VulnerabilityAnalyzer()
     return analyzer.analyze(records)
+
+
+def parse_nmap_output(output_file: Path) -> dict[str, Any]:
+    """Parse nmap XML output (-oX) and run port-scan risk analysis."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "open_ports": [],
+        "hosts_up": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8").strip()
+    if not content:
+        return default_empty
+
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as exc:
+        logger.warning("Failed to parse nmap XML output: %s", exc)
+        return default_empty
+
+    records: list[dict[str, Any]] = []
+    for host in root.findall("host"):
+        status = host.find("status")
+        host_state = status.get("state", "unknown") if status is not None else "unknown"
+        addr_elem = host.find("address[@addrtype='ipv4']")
+        if addr_elem is None:
+            addr_elem = host.find("address[@addrtype='ipv6']")
+        ip = addr_elem.get("addr", "unknown") if addr_elem is not None else "unknown"
+
+        ports_elem = host.find("ports")
+        if ports_elem is None:
+            continue
+        for port_elem in ports_elem.findall("port"):
+            state_elem = port_elem.find("state")
+            if state_elem is None or state_elem.get("state") != "open":
+                continue
+            svc_elem = port_elem.find("service")
+            records.append({
+                "ip": ip,
+                "host_state": host_state,
+                "port": int(port_elem.get("portid", 0)),
+                "protocol": port_elem.get("protocol", "tcp"),
+                "service": svc_elem.get("name", "") if svc_elem is not None else "",
+                "product": svc_elem.get("product", "") if svc_elem is not None else "",
+                "version": svc_elem.get("version", "") if svc_elem is not None else "",
+            })
+
+    hosts_up = len({r["ip"] for r in records if r["host_state"] == "up"})
+    analyzer = PortScanAnalyzer()
+    result = analyzer.analyze(records)
+    result["hosts_up"] = hosts_up
+    return result
+
+
+def parse_masscan_output(output_file: Path) -> dict[str, Any]:
+    """Parse masscan JSON output (-oJ) and run port-scan risk analysis."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "open_ports": [],
+        "hosts_up": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8").strip()
+    # Masscan sometimes wraps output in an array; sometimes each line is a JSON object.
+    if not content:
+        return default_empty
+
+    try:
+        data = json.loads(content)
+        if not isinstance(data, list):
+            data = [data]
+    except json.JSONDecodeError:
+        data = []
+        for line in content.splitlines():
+            line = line.strip().rstrip(",")
+            if not line or not line.startswith("{"):
+                continue
+            try:
+                data.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+
+    records: list[dict[str, Any]] = []
+    for entry in data:
+        ip = entry.get("ip", "")
+        for port_info in entry.get("ports", []):
+            records.append({
+                "ip": ip,
+                "host_state": "up",
+                "port": int(port_info.get("port", 0)),
+                "protocol": port_info.get("proto", "tcp"),
+                "service": port_info.get("status", ""),
+                "product": "",
+                "version": "",
+            })
+
+    hosts_up = len({r["ip"] for r in records})
+    analyzer = PortScanAnalyzer()
+    result = analyzer.analyze(records)
+    result["hosts_up"] = hosts_up
+    return result
+
+
+def parse_ffuf_output(output_file: Path) -> dict[str, Any]:
+    """Parse FFUF JSON output (-of json) and run content-discovery analysis."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "discovered_paths": [],
+        "total_requests": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8").strip()
+    if not content:
+        return default_empty
+
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as exc:
+        logger.warning("Failed to parse FFUF JSON output: %s", exc)
+        return default_empty
+
+    results = data.get("results", []) if isinstance(data, dict) else []
+    analyzer = ContentDiscoveryAnalyzer()
+    result = analyzer.analyze(results)
+    result["total_requests"] = data.get("commandline", {}) and len(results) or len(results)
+    return result
+
+
+def parse_nuclei_output(output_file: Path) -> dict[str, Any]:
+    """Parse Nuclei JSONL output (-json-export) and run vulnerability analysis."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "cve_ids": [],
+        "templates_matched": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8").strip()
+    if not content:
+        return default_empty
+
+    records: list[dict[str, Any]] = []
+    for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            pass
+
+    analyzer = NucleiAnalyzer()
+    return analyzer.analyze(records)
+
+
+# Dispatch table: profile name → parser function
+_PARSER_MAP: dict[str, Any] = {
+    "recon": parse_httpx_output,
+    "web-discovery": parse_httpx_output,
+    "network-portscan": parse_nmap_output,
+    "fast-portscan": parse_masscan_output,
+    "content-discovery": parse_ffuf_output,
+    "vuln-assessment": parse_nuclei_output,
+}
 
 
 class ControllerAgent:
@@ -155,8 +331,9 @@ class ControllerAgent:
                     logger.info("Job %s was cancelled during scan. Teardown complete.", job_id)
                     return True
 
-                # Parse output into normalized findings
-                summary = parse_httpx_output(output_file)
+                # Parse output using profile-specific parser
+                parser = _PARSER_MAP.get(profile, parse_httpx_output)
+                summary = parser(output_file)
                 self.complete_job(job_id, summary)
                 return True
 

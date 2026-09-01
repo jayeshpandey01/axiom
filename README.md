@@ -8,9 +8,20 @@ FastAPI service for scheduling **authorized** security testing jobs. It delibera
 - Authorization reference recorded for every target
 - Idempotent job submission and cancellation
 - Durable PostgreSQL/SQLite job model
-- A worker boundary that will later dispatch signed, fixed-profile jobs to a private controller
+- A worker boundary that dispatches signed, fixed-profile jobs to a private controller
 
-The controller integration is intentionally unimplemented. Do not add shell execution to the API or worker.
+### Supported scan profiles
+
+| Profile | Scanner | Purpose |
+|---|---|---|
+| `recon` | httpx | Fast HTTP service, security headers, and title discovery |
+| `web-discovery` | httpx | Comprehensive HTTP/HTTPS port, technology, and vulnerability discovery |
+| `network-portscan` | nmap | Detailed TCP service and version detection (`-sV -T4`) |
+| `fast-portscan` | masscan | High-speed full port availability scan (`--rate=1000`) |
+| `content-discovery` | ffuf | Web directory, route, and endpoint enumeration via fuzzing |
+| `vuln-assessment` | nuclei | Template-based vulnerability detection (info → critical severity) |
+
+The controller integration is intentionally isolated. Do not add shell execution to the API or worker.
 
 ## Authentication and rate limits
 

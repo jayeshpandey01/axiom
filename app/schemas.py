@@ -6,7 +6,24 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.scope import validate_target_scope
 
-SAFE_PROFILES = {"recon", "web-discovery"}
+SAFE_PROFILES = {
+    "recon",
+    "web-discovery",
+    "network-portscan",
+    "fast-portscan",
+    "content-discovery",
+    "vuln-assessment",
+}
+
+# Shared profile literal used across request schemas and controller job schemas.
+ProfileLiteral = Literal[
+    "recon",
+    "web-discovery",
+    "network-portscan",
+    "fast-portscan",
+    "content-discovery",
+    "vuln-assessment",
+]
 
 
 class TargetCreate(BaseModel):
@@ -30,7 +47,7 @@ class TargetRead(BaseModel):
 
 class ScanCreate(BaseModel):
     target_id: UUID
-    profile: Literal["recon", "web-discovery"]
+    profile: ProfileLiteral
 
 
 class ScanRead(BaseModel):
@@ -68,7 +85,7 @@ class ScanResultRead(BaseModel):
 class ControllerJobRead(BaseModel):
     id: UUID
     target: str
-    profile: Literal["recon", "web-discovery"]
+    profile: ProfileLiteral
     authorization_reference: str
 
 
