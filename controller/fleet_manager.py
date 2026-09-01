@@ -32,26 +32,28 @@ class FleetManager:
     def _resolve_scanner_binary(self) -> str:
         """Locate ProjectDiscovery httpx binary for standalone direct execution."""
         candidates = [
+            str(Path.home() / "go" / "bin" / "httpx.exe"),
+            str(Path.home() / "go" / "bin" / "httpx"),
             "/usr/local/bin/httpx",
             "/usr/bin/httpx",
-            str(Path.home() / "go" / "bin" / "httpx"),
             shutil.which("httpx-pd"),
             shutil.which("httpx"),
         ]
         for candidate in candidates:
             if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
-                # Verify it is not the python httpx package inside venv
-                if not candidate.endswith("/.venv/bin/httpx") and not candidate.endswith("\\.venv\\Scripts\\httpx.exe"):
+                # Verify it is not the python httpx package inside venv or python Scripts
+                cand_str = str(candidate).lower()
+                if "venv" not in cand_str and "programs\\python" not in cand_str and "programs/python" not in cand_str:
                     return candidate
 
         system_bin = shutil.which("httpx")
-        if system_bin and ".venv" not in system_bin:
+        if system_bin and "venv" not in system_bin.lower() and "programs\\python" not in system_bin.lower():
             return system_bin
 
         if self.dry_run:
             return "mock-httpx"
 
-        raise FileNotFoundError("ProjectDiscovery 'httpx' binary not found at /usr/local/bin/httpx or in PATH.")
+        raise FileNotFoundError("ProjectDiscovery 'httpx' binary not found at ~/go/bin/httpx, /usr/local/bin/httpx, or in PATH.")
 
     def _resolve_binary(self, binary_name: str) -> str:
         """Locate Axiom binary either in configured path or system PATH."""
