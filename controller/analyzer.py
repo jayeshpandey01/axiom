@@ -4,8 +4,8 @@ Analyzes raw scanner probe records (HTTP response headers, status codes,
 technologies, server banners) against security rules and outputs categorized,
 severity-ranked findings and risk scores.
 """
-from typing import Any
 import json
+from typing import Any
 
 
 class VulnerabilityAnalyzer:
