@@ -1,0 +1,83 @@
+services:
+  - type: web
+    name: scan-tool-api
+    runtime: docker
+    plan: 1c-2g
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: AUTH_MODE
+        value: oidc
+      - key: DATABASE_URL
+        fromDatabase:
+          name: scan-tool-db
+          property: connectionString
+      - key: API_KEY
+        generateValue: true
+      - key: CONTROLLER_SHARED_SECRET
+        generateValue: true
+      - key: OIDC_ISSUER
+        sync: false
+      - key: OIDC_AUDIENCE
+        sync: false
+      - key: OIDC_JWKS_URL
+        sync: false
+      - key: RATE_LIMIT_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: scan-tool-rate-limit
+          property: connectionString
+      - key: RESULT_STORAGE_BUCKET
+        sync: false
+      - key: RESULT_STORAGE_REGION
+        sync: false
+      - key: RESULT_STORAGE_ENDPOINT_URL
+        sync: false
+      - key: RESULT_STORAGE_KMS_KEY_ID
+        sync: false
+      - key: RESULT_ENCRYPTION_KEY
+        sync: false
+      - key: RESULT_RETENTION_DAYS
+        value: "30"
+
+  - type: worker
+    name: scan-tool-worker
+    runtime: docker
+    plan: 1c-2g
+    dockerCommand: python -m app.worker
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: AUTH_MODE
+        value: oidc
+      - key: DATABASE_URL
+        fromDatabase:
+          name: scan-tool-db
+          property: connectionString
+      - key: API_KEY
+        sync: false
+      - key: CONTROLLER_SHARED_SECRET
+        sync: false
+      - key: RESULT_STORAGE_BUCKET
+        sync: false
+      - key: RESULT_STORAGE_REGION
+        sync: false
+      - key: RESULT_STORAGE_ENDPOINT_URL
+        sync: false
+      - key: RESULT_STORAGE_KMS_KEY_ID
+        sync: false
+      - key: RESULT_ENCRYPTION_KEY
+        sync: false
+      - key: RESULT_RETENTION_DAYS
+        value: "30"
+
+  - type: keyvalue
+    name: scan-tool-rate-limit
+    plan: 256mb
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+databases:
+  - name: scan-tool-db
+    plan: basic-256mb

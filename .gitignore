@@ -1,0 +1,36 @@
+# Environment & Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Databases & Local State
+*.db
+*.sqlite3
+scan_tool.db
+
+# Controller Runs & Logs
+runs/
+*.log
+*.bin
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
