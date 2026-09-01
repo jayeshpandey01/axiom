@@ -6,12 +6,16 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db import get_db
 from app.models import ControllerNonce
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False, description="Admin or Operator API Key")
+bearer_scheme = HTTPBearer(auto_error=False, description="OIDC JWT Bearer token (Production)")
 
 
 @dataclass(frozen=True)
@@ -54,8 +58,12 @@ def _oidc_principal(authorization: str | None) -> Principal:
     return Principal(role=role, subject=subject)
 
 
-def authenticate(x_api_key: str | None = Header(default=None), authorization: str | None = Header(default=None)) -> Principal:
+def authenticate(
+    x_api_key: str | None = Security(api_key_header),
+    auth_credentials: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+) -> Principal:
     settings = get_settings()
+    authorization = f"Bearer {auth_credentials.credentials}" if auth_credentials else None
     if settings.auth_mode == "oidc":
         return _oidc_principal(authorization)
     if settings.auth_mode == "api_key" and settings.app_env.lower() != "production" and x_api_key:
