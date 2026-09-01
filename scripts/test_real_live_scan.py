@@ -1,12 +1,12 @@
 import json
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from dotenv import load_dotenv
 import httpx
+from dotenv import load_dotenv
 
 load_dotenv(".env.local")
 load_dotenv(".env")
@@ -37,6 +37,7 @@ print(f"[+] Scan queued for {TARGET} with ID: {scan_id}")
 
 # 3. Process with real Go httpx engine
 from controller.agent import ControllerAgent
+
 agent = ControllerAgent()
 agent.run_batch(max_idle_sec=6, poll_interval_sec=2)
 

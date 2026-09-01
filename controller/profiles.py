@@ -1,5 +1,5 @@
 """Fixed scanner profiles mapping server-side profile enums to safe Axiom module invocations."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

@@ -19,7 +19,6 @@ from controller.agent import (
     parse_nuclei_output,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helper: register a target and queue a scan, return (target_id, scan_id)
 # ---------------------------------------------------------------------------

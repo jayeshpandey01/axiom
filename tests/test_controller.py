@@ -137,7 +137,7 @@ def test_dry_run_nuclei_scan(tmp_path: Path) -> None:
     with manager.managed_fleet("test-nuclei-fleet", count=1) as fleet:
         manager.execute_scan(fleet, "vuln-assessment", "example.com", output_file)
         assert output_file.exists()
-        lines = [l.strip() for l in output_file.read_text(encoding="utf-8").splitlines() if l.strip()]
+        lines = [line.strip() for line in output_file.read_text(encoding="utf-8").splitlines() if line.strip()]
         assert len(lines) >= 1
         record = json.loads(lines[0])
         assert "template-id" in record
