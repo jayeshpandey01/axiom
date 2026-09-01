@@ -1,6 +1,5 @@
 """Fixed scanner profiles mapping server-side profile enums to safe Axiom module invocations."""
 from dataclasses import dataclass
-from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -32,7 +31,7 @@ SUPPORTED_PROFILES: dict[str, ScannerProfile] = {
 
 def get_profile(profile_name: str) -> ScannerProfile:
     """Retrieve and validate scanner profile.
-    
+
     Raises:
         ValueError: If an unrecognized profile is requested.
     """

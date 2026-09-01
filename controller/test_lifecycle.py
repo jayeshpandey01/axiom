@@ -3,7 +3,6 @@
 Runs an authorized test scan, verifies output, and proves guaranteed fleet teardown.
 """
 import argparse
-import json
 import logging
 import sys
 import time
@@ -11,7 +10,6 @@ from pathlib import Path
 
 from controller.config import settings
 from controller.fleet_manager import FleetManager
-from controller.watchdog import OrphanWatchdog
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("test_lifecycle")
@@ -30,7 +28,6 @@ def run_test(target: str = DEFAULT_AUTHORIZED_TARGET, dry_run: bool = False) -> 
     fleet_name = f"poc-test-{int(time.time())}"
     output_path = Path(settings.work_dir) / f"{fleet_name}_output.json"
     manager = FleetManager(dry_run=dry_run)
-    watchdog = OrphanWatchdog(manager=manager)
 
     start_time = time.time()
     success = False
@@ -52,7 +49,7 @@ def run_test(target: str = DEFAULT_AUTHORIZED_TARGET, dry_run: bool = False) -> 
             else:
                 print("[Error] Output file was not generated.")
 
-            print(f"\n[Step 3/3] Exiting context block (triggering automatic teardown)...")
+            print("\n[Step 3/3] Exiting context block (triggering automatic teardown)...")
 
     except Exception as exc:
         print(f"\n[EXCEPTION CAUGHT] {exc}")

@@ -1,9 +1,10 @@
 import json
 import uuid
+
 from fastapi.testclient import TestClient
 
 from app.main import app
-from controller.agent import ControllerAgent, generate_signed_headers
+from controller.agent import generate_signed_headers
 
 
 def test_full_end_to_end_scan_lifecycle() -> None:

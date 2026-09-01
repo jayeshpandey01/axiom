@@ -1,8 +1,6 @@
 """Background Watchdog Daemon to detect and terminate orphaned Axiom scanner droplets."""
 import logging
 import time
-from datetime import datetime, timezone
-from pathlib import Path
 
 from controller.config import settings
 from controller.fleet_manager import FleetManager

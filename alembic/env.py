@@ -6,9 +6,9 @@ from logging.config import fileConfig
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from alembic import context
+from app import models  # noqa: F401 - registers ORM metadata
 from app.core.config import get_settings
 from app.db import Base
-from app import models  # noqa: F401 - registers ORM metadata
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

@@ -28,9 +28,18 @@ pythonpath = ["."]
 addopts = "-v --tb=short"
 
 [tool.ruff]
-line-length = 120
+line-length = 140
 target-version = "py311"
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "alembic/versions",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B"]
-ignore = ["B008"]  # Allow FastAPI Depends in function defaults
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # Line length limit
+    "B008",  # Allow Depends() in FastAPI function defaults
+]

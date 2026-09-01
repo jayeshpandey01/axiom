@@ -1,11 +1,11 @@
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from controller.config import settings
-from controller.fleet_manager import FleetError, FleetManager
-from controller.profiles import SUPPORTED_PROFILES, get_profile
+from controller.fleet_manager import FleetManager
+from controller.profiles import get_profile
 from controller.watchdog import OrphanWatchdog
 
 

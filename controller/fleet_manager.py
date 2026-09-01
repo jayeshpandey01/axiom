@@ -34,14 +34,14 @@ class FleetManager:
         custom_path = self.axiom_bin_dir / binary_name
         if custom_path.is_file() and os.access(custom_path, os.X_OK):
             return str(custom_path)
-        
+
         system_bin = shutil.which(binary_name)
         if system_bin:
             return system_bin
-            
+
         if self.dry_run:
             return f"mock-{binary_name}"
-            
+
         raise FileNotFoundError(
             f"Axiom binary '{binary_name}' not found at '{custom_path}' or in system PATH. "
             "Ensure Axiom is installed or enable dry_run mode."
@@ -79,12 +79,12 @@ class FleetManager:
 
         bin_path = self._resolve_binary("axiom-fleet")
         cmd = [bin_path, fleet_name, "-i", str(count)]
-        
+
         # Fleet spin-up timeout: 8 minutes max
         result = self._run_command(cmd, timeout=480)
         if result.returncode != 0 and not self.dry_run:
             raise FleetError(f"Failed to create fleet '{fleet_name}': {result.stderr}")
-            
+
         logger.info("Fleet '%s' with %d instance(s) created successfully.", fleet_name, count)
         return True
 

@@ -7,7 +7,6 @@ import hashlib
 import hmac
 import json
 import logging
-import os
 import secrets
 import time
 from pathlib import Path
@@ -16,7 +15,7 @@ from typing import Any
 import httpx
 
 from controller.config import settings
-from controller.fleet_manager import FleetError, FleetManager
+from controller.fleet_manager import FleetManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("controller.agent")
