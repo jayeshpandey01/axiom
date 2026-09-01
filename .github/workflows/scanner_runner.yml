@@ -1,0 +1,55 @@
+name: Automated Cloud Scan Runner
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # Automatically runs every 5 minutes in GitHub's Cloud (24/7)
+  repository_dispatch:
+    types: [execute-scan] # Triggered instantly via webhook when a scan is requested
+  workflow_dispatch:      # Manual trigger button in GitHub Actions tab
+
+concurrency:
+  group: cloud-scanner-agent
+  cancel-in-progress: false
+
+jobs:
+  run-scanner:
+    name: Process Queued Scans (24/7 Cloud Runner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Set up Go (for httpx)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Install ProjectDiscovery httpx binary
+        run: |
+          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-controller.txt
+
+      - name: Execute Controller Agent (Batch Mode)
+        env:
+          CONTROLLER_API_ENDPOINT: ${{ secrets.CONTROLLER_API_ENDPOINT || 'https://axiom-xjkc.onrender.com' }}
+          CONTROLLER_SHARED_SECRET: ${{ secrets.CONTROLLER_SHARED_SECRET }}
+          RESULT_ENCRYPTION_KEY: ${{ secrets.RESULT_ENCRYPTION_KEY }}
+          LOG_LEVEL: INFO
+        run: |
+          echo "Starting Controller Cloud Runner against: $CONTROLLER_API_ENDPOINT"
+          python -m controller.agent --once --idle-timeout 10 --interval 3

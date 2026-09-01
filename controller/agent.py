@@ -185,6 +185,28 @@ class ControllerAgent:
             if output_file.exists():
                 output_file.unlink(missing_ok=True)
 
+    def run_batch(self, max_idle_sec: int = 15, poll_interval_sec: int = 3) -> int:
+        """Process all queued jobs until queue is empty for max_idle_sec, then exit cleanly."""
+        logger.info("Starting Controller Agent in batch mode at %s...", self.api_base_url)
+        processed = 0
+        idle_time = 0
+        while idle_time < max_idle_sec:
+            try:
+                job = self.claim_job()
+                if job:
+                    self.process_job(job)
+                    processed += 1
+                    idle_time = 0
+                else:
+                    time.sleep(poll_interval_sec)
+                    idle_time += poll_interval_sec
+            except Exception as exc:
+                logger.error("Controller agent batch loop error: %s", exc)
+                time.sleep(poll_interval_sec)
+                idle_time += poll_interval_sec
+        logger.info("Batch mode completed. Total jobs processed: %d.", processed)
+        return processed
+
     def run_loop(self, poll_interval_sec: int = 5) -> None:
         """Continuous polling loop."""
         logger.info("Starting Controller Agent polling loop at %s (interval: %ds)...", self.api_base_url, poll_interval_sec)
@@ -201,5 +223,16 @@ class ControllerAgent:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Authorized Scan Controller Agent")
+    parser.add_argument("--once", action="store_true", help="Process queued jobs and exit cleanly (for CI/CD and Cloud Runners)")
+    parser.add_argument("--idle-timeout", type=int, default=15, help="Idle timeout in seconds before batch mode exits")
+    parser.add_argument("--interval", type=int, default=5, help="Polling interval in seconds")
+    cli_args = parser.parse_args()
+
     agent = ControllerAgent()
-    agent.run_loop()
+    if cli_args.once:
+        agent.run_batch(max_idle_sec=cli_args.idle_timeout, poll_interval_sec=cli_args.interval)
+    else:
+        agent.run_loop(poll_interval_sec=cli_args.interval)
