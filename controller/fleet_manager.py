@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -140,7 +140,7 @@ class FleetManager:
             return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="[dry-run success]\n", stderr="")
 
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603
                 cmd,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,

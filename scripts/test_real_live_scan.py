@@ -3,6 +3,8 @@ import os
 import sys
 from pathlib import Path
 
+from controller.agent import ControllerAgent
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx
@@ -36,7 +38,6 @@ scan_id = s_res.json()["id"]
 print(f"[+] Scan queued for {TARGET} with ID: {scan_id}")
 
 # 3. Process with real Go httpx engine
-from controller.agent import ControllerAgent
 
 agent = ControllerAgent()
 agent.run_batch(max_idle_sec=6, poll_interval_sec=2)

@@ -9,10 +9,10 @@ import json
 import logging
 import secrets
 import time
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
+import defusedxml.ElementTree as ET
 import httpx
 
 from controller.analyzer import ContentDiscoveryAnalyzer, NucleiAnalyzer, PortScanAnalyzer, VulnerabilityAnalyzer
