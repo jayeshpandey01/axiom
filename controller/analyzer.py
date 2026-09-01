@@ -5,6 +5,7 @@ technologies, server banners) against security rules and outputs categorized,
 severity-ranked findings and risk scores.
 """
 from typing import Any
+import json
 
 
 class VulnerabilityAnalyzer:
@@ -21,11 +22,13 @@ class VulnerabilityAnalyzer:
             description: str,
             evidence: Any,
             remediation: str | None = None,
+            logs: str | None = None,
         ):
             nonlocal finding_id_counter
             findings.append({
                 "id": f"SEC-{finding_id_counter:03d}",
                 "code": code,
+                "logs": logs or "",
                 "severity": severity.upper(),
                 "title": title,
                 "description": description,
@@ -255,11 +258,12 @@ class PortScanAnalyzer:
         findings: list[dict[str, Any]] = []
         finding_id_counter = 1
 
-        def add_finding(code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None) -> None:
+        def add_finding(code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None) -> None:
             nonlocal finding_id_counter
             findings.append({
                 "id": f"SEC-{finding_id_counter:03d}",
                 "code": code,
+                "logs": logs or "",
                 "severity": severity.upper(),
                 "title": title,
                 "description": description,
@@ -393,11 +397,12 @@ class ContentDiscoveryAnalyzer:
         findings: list[dict[str, Any]] = []
         finding_id_counter = 1
 
-        def add_finding(code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None) -> None:
+        def add_finding(code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None) -> None:
             nonlocal finding_id_counter
             findings.append({
                 "id": f"SEC-{finding_id_counter:03d}",
                 "code": code,
+                "logs": logs or "",
                 "severity": severity.upper(),
                 "title": title,
                 "description": description,
@@ -541,6 +546,7 @@ class NucleiAnalyzer:
             findings.append({
                 "id": f"SEC-{finding_id_counter:03d}",
                 "code": f"NUCLEI_{template_id.upper().replace('-', '_')}",
+                "logs": json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                 "severity": severity,
                 "title": name,
                 "description": description,

@@ -110,3 +110,4 @@ for profile, scan_id in scan_ids.items():
         total_findings = result.get('summary', {}).get('risk_summary', {}).get('total', 0)
         print(f"[{profile}] (Total Findings: {total_findings})")
 
+
