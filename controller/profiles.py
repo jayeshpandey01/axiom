@@ -15,16 +15,16 @@ SUPPORTED_PROFILES: dict[str, ScannerProfile] = {
     "recon": ScannerProfile(
         name="recon",
         axiom_module="httpx",
-        description="Fast HTTP service and title discovery on authorized hostnames",
+        description="Fast HTTP service, security headers, and title discovery on authorized hostnames",
         default_timeout_sec=600,
-        extra_flags=["-silent", "-status-code", "-title", "-tech-detect", "-json"],
+        extra_flags=["-silent", "-status-code", "-title", "-tech-detect", "-web-server", "-include-response-header", "-json"],
     ),
     "web-discovery": ScannerProfile(
         name="web-discovery",
         axiom_module="httpx",
-        description="Comprehensive HTTP/HTTPS port and technology discovery",
+        description="Comprehensive HTTP/HTTPS port, technology, and vulnerability discovery",
         default_timeout_sec=900,
-        extra_flags=["-silent", "-status-code", "-title", "-web-server", "-content-type", "-json"],
+        extra_flags=["-silent", "-status-code", "-title", "-tech-detect", "-web-server", "-content-type", "-include-response-header", "-json"],
     ),
 }
 

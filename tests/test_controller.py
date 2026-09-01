@@ -55,3 +55,37 @@ def test_watchdog_dry_run_cleanup() -> None:
     watchdog = OrphanWatchdog(manager=manager)
     purged = watchdog.cleanup_all_fleets(force=True)
     assert isinstance(purged, int)
+
+
+def test_vulnerability_analyzer_classifies_findings() -> None:
+    from controller.analyzer import VulnerabilityAnalyzer
+
+    sample_records = [
+        {
+            "url": "https://example.com",
+            "status_code": 200,
+            "webserver": "Apache/2.4.41 (Ubuntu)",
+            "title": "Example Domain Admin Dashboard",
+            "tech": ["Apache", "PHP", "Ubuntu"],
+            "header": {
+                "Server": "Apache/2.4.41 (Ubuntu)",
+                "X-Powered-By": "PHP/7.4.3",
+            },
+        }
+    ]
+
+    analyzer = VulnerabilityAnalyzer()
+    summary = analyzer.analyze(sample_records)
+
+    assert summary["live_hosts_count"] == 1
+    assert "risk_summary" in summary
+    assert summary["risk_summary"]["low"] >= 1
+    assert summary["risk_summary"]["total"] >= 1
+
+    findings = summary["findings"]
+    finding_codes = [f["code"] for f in findings]
+
+    assert "INFO_SERVER_BANNER_LEAK" in finding_codes
+    assert "INFO_POWERED_BY_LEAK" in finding_codes
+    assert "SEC_HEADER_MISSING_HSTS" in finding_codes
+    assert "RECON_TECH_DETECTED" in finding_codes

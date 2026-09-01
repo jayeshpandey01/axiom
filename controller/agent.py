@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from controller.analyzer import VulnerabilityAnalyzer
 from controller.config import settings
 from controller.fleet_manager import FleetManager
 
@@ -37,13 +38,22 @@ def generate_signed_headers(method: str, path: str, body: bytes = b"", shared_se
 
 
 def parse_httpx_output(output_file: Path) -> dict[str, Any]:
-    """Parse JSON or line-delimited JSON output from httpx into a normalized summary."""
+    """Parse JSON output from httpx and run security vulnerability analysis."""
+    default_empty = {
+        "live_hosts_count": 0,
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "status_codes": {},
+        "web_servers": [],
+        "titles": [],
+        "technologies": [],
+    }
     if not output_file.exists():
-        return {"live_hosts": 0, "findings": []}
+        return default_empty
 
     content = output_file.read_text(encoding="utf-8").strip()
     if not content:
-        return {"live_hosts": 0, "findings": []}
+        return default_empty
 
     records = []
     for line in content.splitlines():
@@ -53,37 +63,10 @@ def parse_httpx_output(output_file: Path) -> dict[str, Any]:
         try:
             records.append(json.loads(line))
         except json.JSONDecodeError:
-            # Plain text line
             records.append({"raw": line})
 
-    status_codes = {}
-    web_servers = set()
-    titles = []
-    technologies = set()
-
-    for item in records:
-        if isinstance(item, dict):
-            code = item.get("status_code") or item.get("status-code")
-            if code:
-                status_codes[str(code)] = status_codes.get(str(code), 0) + 1
-            server = item.get("webserver") or item.get("web_server")
-            if server:
-                web_servers.add(str(server))
-            title = item.get("title")
-            if title:
-                titles.append(str(title)[:80])
-            tech = item.get("tech") or item.get("technologies") or []
-            if isinstance(tech, list):
-                for t in tech:
-                    technologies.add(str(t))
-
-    return {
-        "live_hosts_count": len(records),
-        "status_codes": status_codes,
-        "web_servers": list(web_servers)[:10],
-        "titles": titles[:10],
-        "technologies": list(technologies)[:20],
-    }
+    analyzer = VulnerabilityAnalyzer()
+    return analyzer.analyze(records)
 
 
 class ControllerAgent:
