@@ -137,6 +137,7 @@ def test_trigger_cloud_scanner_dispatches_when_idle():
         github_repo_owner="jayeshpandey01",
         github_repo_name="axiom",
         github_workflow_id="scanner_runner.yml",
+        github_ref="main",
     )
     with (
         patch("app.github_dispatcher.get_settings", return_value=dummy_settings),
@@ -151,4 +152,28 @@ def test_trigger_cloud_scanner_dispatches_when_idle():
             workflow_id="scanner_runner.yml",
             token="ghp_test",
             ref="main",
+        )
+
+
+def test_trigger_cloud_scanner_strips_refs_heads_prefix():
+    dummy_settings = Settings(
+        github_token="ghp_test",
+        github_repo_owner="jayeshpandey01",
+        github_repo_name="axiom",
+        github_workflow_id="scanner_runner.yml",
+        github_ref="refs/heads/release/v1.0",
+    )
+    with (
+        patch("app.github_dispatcher.get_settings", return_value=dummy_settings),
+        patch("app.github_dispatcher.check_github_runner_active", return_value=False),
+        patch("app.github_dispatcher.dispatch_github_runner", return_value=True) as mock_dispatch,
+    ):
+        result = trigger_cloud_scanner_if_needed()
+        assert result is True
+        mock_dispatch.assert_called_once_with(
+            owner="jayeshpandey01",
+            repo="axiom",
+            workflow_id="scanner_runner.yml",
+            token="ghp_test",
+            ref="release/v1.0",
         )

@@ -114,13 +114,14 @@ def trigger_cloud_scanner_if_needed() -> bool:
             logger.info("GitHub Cloud Scanner runner is already active. Skipping redundant dispatch.")
             return True
 
-        logger.info("No active cloud runner found. Dispatching %s...", settings.github_workflow_id)
+        ref = (settings.github_ref or "main").removeprefix("refs/heads/")
+        logger.info("No active cloud runner found. Dispatching %s (ref: %s)...", settings.github_workflow_id, ref)
         return dispatch_github_runner(
             owner=settings.github_repo_owner,
             repo=settings.github_repo_name,
             workflow_id=settings.github_workflow_id,
             token=settings.github_token,
-            ref=settings.github_ref,
+            ref=ref,
         )
     except Exception as exc:
         logger.warning("Exception during cloud scanner auto-dispatch: %s", exc)
