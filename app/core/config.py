@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     github_repo_name: str = "axiom"
     github_workflow_id: str = "scanner_runner.yml"
     github_ref: str = "main"
+    axiom_token: str | None = None
+    axiom_dataset: str = "security-scans"
+    axiom_url: str | None = None
+    axiom_enabled: bool = False
 
     def validate_production(self) -> None:
         if self.app_env.lower() != "production":

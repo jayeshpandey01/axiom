@@ -1,4 +1,5 @@
 """Background Watchdog Daemon to detect and terminate orphaned Axiom scanner droplets."""
+
 import logging
 import time
 

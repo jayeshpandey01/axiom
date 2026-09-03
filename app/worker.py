@@ -4,6 +4,7 @@ Runs periodically on Render to:
 1. Reap stuck or timed-out scan jobs where the controller disconnected or crashed.
 2. Purge expired encrypted raw artifacts from S3/R2 storage.
 """
+
 import logging
 import time
 from datetime import UTC, datetime, timedelta

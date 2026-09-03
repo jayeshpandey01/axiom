@@ -1,4 +1,5 @@
 """Tests for the GitHub Actions Cloud Scanner Dispatcher."""
+
 from unittest.mock import MagicMock, patch
 
 from app.core.config import Settings

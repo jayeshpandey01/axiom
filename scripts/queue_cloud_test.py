@@ -34,7 +34,7 @@ print(f"\n[2/4] Registering Target '{TARGET_HOST}'...")
 t_res = client.post(
     f"{API_BASE}/v1/targets",
     headers={"X-API-Key": ADMIN_KEY},
-    json={"value": TARGET_HOST, "owner_reference": "Nmap Org", "authorization_reference": "AUTH-CLOUD-TEST-001"}
+    json={"value": TARGET_HOST, "owner_reference": "Nmap Org", "authorization_reference": "AUTH-CLOUD-TEST-001"},
 )
 if t_res.status_code not in (200, 201):
     print(f"[-] Error registering target: {t_res.status_code} {t_res.text}")
@@ -45,11 +45,7 @@ print(f"[+] Target Registered. Target ID: {target_id}")
 
 # 3. Queue Scan Job
 print(f"\n[3/4] Queuing Scan Job for profile '{PROFILE}'...")
-s_res = client.post(
-    f"{API_BASE}/v1/scans",
-    headers={"X-API-Key": OPERATOR_KEY},
-    json={"target_id": target_id, "profile": PROFILE}
-)
+s_res = client.post(f"{API_BASE}/v1/scans", headers={"X-API-Key": OPERATOR_KEY}, json={"target_id": target_id, "profile": PROFILE})
 if s_res.status_code != 202:
     print(f"[-] Error queuing scan: {s_res.status_code} {s_res.text}")
     sys.exit(1)

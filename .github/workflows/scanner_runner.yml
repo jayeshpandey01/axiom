@@ -27,13 +27,25 @@ jobs:
           python-version: "3.12"
           cache: 'pip'
 
-      - name: Install ProjectDiscovery httpx binary
+      - name: Install Scanner Binaries (httpx, nuclei, ffuf, nmap, masscan)
         run: |
+          sudo apt-get update && sudo apt-get install -y nmap masscan
+          # ProjectDiscovery httpx
           curl -sL https://github.com/projectdiscovery/httpx/releases/download/v1.6.9/httpx_1.6.9_linux_amd64.zip -o httpx.zip
-          unzip -q -o httpx.zip httpx
-          chmod +x httpx
-          sudo mv httpx /usr/local/bin/
+          unzip -q -o httpx.zip httpx && sudo mv httpx /usr/local/bin/ && rm -f httpx.zip
+          # ProjectDiscovery nuclei
+          curl -sL https://github.com/projectdiscovery/nuclei/releases/download/v3.3.7/nuclei_3.3.7_linux_amd64.zip -o nuclei.zip
+          unzip -q -o nuclei.zip nuclei && sudo mv nuclei /usr/local/bin/ && rm -f nuclei.zip
+          # FFUF
+          curl -sL https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_linux_amd64.tar.gz -o ffuf.tar.gz
+          tar -xzf ffuf.tar.gz ffuf && sudo mv ffuf /usr/local/bin/ && rm -f ffuf.tar.gz
+          # Initialize nuclei templates non-interactively
+          nuclei -ut -duc
+          # Verify versions
           httpx -version
+          nuclei -version
+          ffuf -V
+          nmap --version
 
       - name: Install Dependencies
         run: |

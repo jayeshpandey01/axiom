@@ -4,6 +4,7 @@ Tests the full API lifecycle: register target -> queue scan with new profile ->
 controller claims -> controller completes with tool-specific summary -> verify result.
 All tests use dry-run output fixtures to avoid requiring real scanner binaries.
 """
+
 import json
 import uuid
 
@@ -14,6 +15,7 @@ from app.main import app
 from controller.agent import (
     generate_signed_headers,
     parse_ffuf_output,
+    parse_joern_output,
     parse_masscan_output,
     parse_nmap_output,
     parse_nuclei_output,
@@ -22,6 +24,7 @@ from controller.agent import (
 # ---------------------------------------------------------------------------
 # Helper: register a target and queue a scan, return (target_id, scan_id)
 # ---------------------------------------------------------------------------
+
 
 def _register_and_queue(client: TestClient, profile: str) -> tuple[str, str]:
     settings = get_settings()
@@ -69,6 +72,7 @@ def _claim_and_complete(client: TestClient, scan_id: str, summary: dict) -> None
 # ---------------------------------------------------------------------------
 # Profile-specific E2E tests
 # ---------------------------------------------------------------------------
+
 
 def test_nmap_scan_lifecycle() -> None:
     """Full lifecycle test for network-portscan (nmap) profile."""
@@ -152,8 +156,15 @@ def test_nuclei_scan_lifecycle() -> None:
         nuclei_summary = {
             "risk_summary": {"critical": 1, "high": 0, "medium": 0, "low": 0, "info": 1, "total": 2},
             "findings": [
-                {"id": "SEC-001", "code": "NUCLEI_CVE_2021_44228", "severity": "CRITICAL",
-                 "title": "Log4Shell RCE", "description": "Critical.", "evidence": "matched", "remediation": "Upgrade."},
+                {
+                    "id": "SEC-001",
+                    "code": "NUCLEI_CVE_2021_44228",
+                    "severity": "CRITICAL",
+                    "title": "Log4Shell RCE",
+                    "description": "Critical.",
+                    "evidence": "matched",
+                    "remediation": "Upgrade.",
+                },
             ],
             "cve_ids": ["CVE-2021-44228"],
             "templates_matched": 2,
@@ -167,14 +178,78 @@ def test_nuclei_scan_lifecycle() -> None:
         assert "CVE-2021-44228" in result["summary"]["cve_ids"]
 
 
+def test_sast_joern_scan_lifecycle() -> None:
+    """Full lifecycle test for sast-joern via dedicated /v1/sast/scans endpoints."""
+    with TestClient(app) as client:
+        settings = get_settings()
+        admin_headers = {"X-API-Key": settings.admin_api_key}
+        operator_headers = {"X-API-Key": settings.api_key}
+
+        # 1. Register target
+        suffix = uuid.uuid4().hex[:8]
+        target_res = client.post(
+            "/v1/targets",
+            headers=admin_headers,
+            json={
+                "value": f"repo-{suffix}.example.com",
+                "owner_reference": "AppSec Team",
+                "authorization_reference": "AUTH-SAST-JOERN-TEST",
+            },
+        )
+        assert target_res.status_code == 201
+        target_id = target_res.json()["id"]
+
+        # 2. Queue scan on dedicated SAST endpoint
+        scan_res = client.post(
+            "/v1/sast/scans",
+            headers=operator_headers,
+            json={"target_id": target_id, "profile": "sast-joern"},
+        )
+        assert scan_res.status_code == 202, scan_res.text
+        scan_id = scan_res.json()["id"]
+
+        # 3. Check status via SAST endpoint
+        status_res = client.get(f"/v1/sast/scans/{scan_id}", headers=operator_headers)
+        assert status_res.json()["status"] == "queued"
+        assert status_res.json()["profile"] == "sast-joern"
+
+        # 4. Controller claims and completes
+        joern_summary = {
+            "risk_summary": {"critical": 1, "high": 1, "medium": 1, "low": 0, "info": 0, "total": 3},
+            "findings": [
+                {
+                    "id": "SEC-001",
+                    "code": "JOERN_SQL_INJECTION",
+                    "severity": "CRITICAL",
+                    "title": "SQL Injection in User Query Handler",
+                    "description": "Untrusted input reaches SQL execute sink.",
+                    "evidence": {"location": "src/db/queries.py:42", "file": "src/db/queries.py", "line": 42},
+                    "remediation": "Use parameterized queries.",
+                }
+            ],
+            "scanned_files_count": 5,
+            "total_rules_evaluated": 3,
+        }
+        _claim_and_complete(client, scan_id, joern_summary)
+
+        # 5. Fetch result via SAST endpoint
+        result_res = client.get(f"/v1/sast/scans/{scan_id}/result", headers=operator_headers)
+        assert result_res.status_code == 200
+        result = result_res.json()
+        assert result["summary"]["risk_summary"]["critical"] == 1
+        assert result["summary"]["scanned_files_count"] == 5
+
+
 # ---------------------------------------------------------------------------
 # Parser unit tests (no server needed)
 # ---------------------------------------------------------------------------
+
 
 def test_parse_nmap_output_from_dry_run(tmp_path):
     """parse_nmap_output must parse the dry-run mock XML correctly."""
     from controller.fleet_manager import FleetManager
     from controller.profiles import get_profile
+
     manager = FleetManager(dry_run=True)
     manager.work_dir = tmp_path
     output_file = tmp_path / "nmap.xml"
@@ -184,10 +259,10 @@ def test_parse_nmap_output_from_dry_run(tmp_path):
     assert result["hosts_up"] >= 0
 
 
-
 def test_parse_masscan_output_from_dry_run(tmp_path):
     from controller.fleet_manager import FleetManager
     from controller.profiles import get_profile
+
     manager = FleetManager(dry_run=True)
     manager.work_dir = tmp_path
     output_file = tmp_path / "masscan.json"
@@ -200,6 +275,7 @@ def test_parse_masscan_output_from_dry_run(tmp_path):
 def test_parse_ffuf_output_from_dry_run(tmp_path):
     from controller.fleet_manager import FleetManager
     from controller.profiles import get_profile
+
     manager = FleetManager(dry_run=True)
     manager.work_dir = tmp_path
     output_file = tmp_path / "ffuf.json"
@@ -212,10 +288,24 @@ def test_parse_ffuf_output_from_dry_run(tmp_path):
 def test_parse_nuclei_output_from_dry_run(tmp_path):
     from controller.fleet_manager import FleetManager
     from controller.profiles import get_profile
+
     manager = FleetManager(dry_run=True)
     manager.work_dir = tmp_path
     output_file = tmp_path / "nuclei.jsonl"
     manager._write_dry_run_output(get_profile("vuln-assessment"), "example.com", output_file)
     result = parse_nuclei_output(output_file)
     assert result["templates_matched"] >= 1
+    assert result["risk_summary"]["critical"] >= 1
+
+
+def test_parse_joern_output_from_dry_run(tmp_path):
+    from controller.fleet_manager import FleetManager
+    from controller.profiles import get_profile
+
+    manager = FleetManager(dry_run=True)
+    manager.work_dir = tmp_path
+    output_file = tmp_path / "joern.json"
+    manager._write_dry_run_output(get_profile("sast-joern"), "my-app", output_file)
+    result = parse_joern_output(output_file)
+    assert result["risk_summary"]["total"] >= 3
     assert result["risk_summary"]["critical"] >= 1

@@ -1,4 +1,5 @@
 """Fleet Lifecycle Manager for orchestrating Axiom scanner VMs with guaranteed cleanup."""
+
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ logger = logging.getLogger("controller.fleet_manager")
 
 class FleetError(Exception):
     """Base exception for fleet orchestration errors."""
+
     pass
 
 
@@ -98,6 +100,17 @@ class FleetManager:
             if Path(candidate).is_file() and os.access(candidate, os.X_OK):
                 return candidate
 
+        # Python virtual environment Scripts directory
+        import sys
+
+        venv_bin_candidates = [
+            str(Path(sys.executable).parent / f"{binary_name}.exe"),
+            str(Path(sys.executable).parent / binary_name),
+        ]
+        for candidate in venv_bin_candidates:
+            if Path(candidate).is_file() and os.access(candidate, os.X_OK):
+                return candidate
+
         # System PATH
         system_bin = shutil.which(binary_name)
         if system_bin:
@@ -124,8 +137,7 @@ class FleetManager:
         if self.dry_run:
             return wl  # dry-run never reads the file
         raise FileNotFoundError(
-            f"FFUF wordlist not found at '{wl}'. "
-            "Set CONTROLLER_FFUF_WORDLIST to a valid path, or install SecLists to ~/.axiom/wordlists/."
+            f"FFUF wordlist not found at '{wl}'. Set CONTROLLER_FFUF_WORDLIST to a valid path, or install SecLists to ~/.axiom/wordlists/."
         )
 
     # ------------------------------------------------------------------
@@ -206,13 +218,16 @@ class FleetManager:
         """Write a minimal but parseable mock output file for each profile in dry-run mode."""
         if profile.name in ("recon", "web-discovery"):
             output_file_path.write_text(
-                json.dumps({
-                    "host": target_value,
-                    "status_code": 200,
-                    "webserver": "nginx/1.18.0 (Ubuntu)",
-                    "title": "Authorized Testing Target",
-                    "technologies": ["Nginx", "Ubuntu", "OpenSSL"],
-                }) + "\n",
+                json.dumps(
+                    {
+                        "host": target_value,
+                        "status_code": 200,
+                        "webserver": "nginx/1.18.0 (Ubuntu)",
+                        "title": "Authorized Testing Target",
+                        "technologies": ["Nginx", "Ubuntu", "OpenSSL"],
+                    }
+                )
+                + "\n",
                 encoding="utf-8",
             )
         elif profile.name == "network-portscan":
@@ -223,46 +238,234 @@ class FleetManager:
                 f'version="7.94" xmloutputversion="1.05">\n'
                 f'<host><status state="up" reason="echo-reply"/>'
                 f'<address addr="{target_value}" addrtype="ipv4"/>'
-                '<ports>'
+                "<ports>"
                 '<port protocol="tcp" portid="80">'
                 '<state state="open" reason="syn-ack"/>'
                 '<service name="http" product="nginx" version="1.18.0"/>'
-                '</port>'
+                "</port>"
                 '<port protocol="tcp" portid="22">'
                 '<state state="open" reason="syn-ack"/>'
                 '<service name="ssh" product="OpenSSH" version="8.9"/>'
-                '</port>'
-                '</ports></host></nmaprun>\n'
+                "</port>"
+                "</ports></host></nmaprun>\n"
             )
             output_file_path.write_text(xml, encoding="utf-8")
         elif profile.name == "fast-portscan":
             # Masscan JSON output format
             output_file_path.write_text(
-                json.dumps([
-                    {"ip": target_value, "timestamp": str(int(time.time())), "ports": [{"port": 80, "proto": "tcp", "status": "open", "ttl": 64}]},
-                    {"ip": target_value, "timestamp": str(int(time.time())), "ports": [{"port": 443, "proto": "tcp", "status": "open", "ttl": 64}]},
-                ]) + "\n",
+                json.dumps(
+                    [
+                        {
+                            "ip": target_value,
+                            "timestamp": str(int(time.time())),
+                            "ports": [{"port": 80, "proto": "tcp", "status": "open", "ttl": 64}],
+                        },
+                        {
+                            "ip": target_value,
+                            "timestamp": str(int(time.time())),
+                            "ports": [{"port": 443, "proto": "tcp", "status": "open", "ttl": 64}],
+                        },
+                    ]
+                )
+                + "\n",
                 encoding="utf-8",
             )
         elif profile.name == "content-discovery":
             # FFUF JSON output format
             output_file_path.write_text(
-                json.dumps({
-                    "results": [
-                        {"url": f"https://{target_value}/admin", "status": 301, "length": 0, "words": 0, "lines": 0, "duration": 12},
-                        {"url": f"https://{target_value}/api", "status": 200, "length": 512, "words": 8, "lines": 1, "duration": 18},
-                        {"url": f"https://{target_value}/login", "status": 200, "length": 2048, "words": 40, "lines": 60, "duration": 25},
-                    ]
-                }) + "\n",
+                json.dumps(
+                    {
+                        "results": [
+                            {"url": f"https://{target_value}/admin", "status": 301, "length": 0, "words": 0, "lines": 0, "duration": 12},
+                            {"url": f"https://{target_value}/api", "status": 200, "length": 512, "words": 8, "lines": 1, "duration": 18},
+                            {
+                                "url": f"https://{target_value}/login",
+                                "status": 200,
+                                "length": 2048,
+                                "words": 40,
+                                "lines": 60,
+                                "duration": 25,
+                            },
+                        ]
+                    }
+                )
+                + "\n",
                 encoding="utf-8",
             )
         elif profile.name == "vuln-assessment":
             # Nuclei JSONL output (one JSON object per line)
             findings = [
-                {"template-id": "http-missing-security-headers", "info": {"name": "HTTP Missing Security Headers", "severity": "info"}, "host": f"https://{target_value}", "matched-at": f"https://{target_value}", "extracted-results": []},
-                {"template-id": "cve-2021-44228", "info": {"name": "Log4Shell RCE", "severity": "critical"}, "host": f"https://{target_value}", "matched-at": f"https://{target_value}/api/v1/login", "extracted-results": []},
+                {
+                    "template-id": "http-missing-security-headers",
+                    "info": {"name": "HTTP Missing Security Headers", "severity": "info"},
+                    "host": f"https://{target_value}",
+                    "matched-at": f"https://{target_value}",
+                    "extracted-results": [],
+                },
+                {
+                    "template-id": "cve-2021-44228",
+                    "info": {"name": "Log4Shell RCE", "severity": "critical"},
+                    "host": f"https://{target_value}",
+                    "matched-at": f"https://{target_value}/api/v1/login",
+                    "extracted-results": [],
+                },
             ]
             output_file_path.write_text("\n".join(json.dumps(f) for f in findings) + "\n", encoding="utf-8")
+
+        elif profile.name == "sast-joern":
+            # Joern structured SAST findings output format
+            findings = [
+                {
+                    "rule_id": "sql-injection",
+                    "title": "SQL Injection in User Query Handler",
+                    "description": "Untrusted input reaches SQL execute sink without parameterization.",
+                    "score": 9.2,
+                    "severity": "CRITICAL",
+                    "file": f"src/{target_value}/db/queries.py",
+                    "line": 42,
+                    "function": "get_user_by_id",
+                    "evidence": "cursor.execute(f'SELECT * FROM users WHERE id = {user_id}')",
+                    "remediation": "Use parameterized queries or ORM abstractions instead of string formatting.",
+                },
+                {
+                    "rule_id": "command-injection",
+                    "title": "Unsanitized System Command Execution",
+                    "description": "External user argument passed to shell execution sink.",
+                    "score": 8.5,
+                    "severity": "HIGH",
+                    "file": f"src/{target_value}/utils/system.py",
+                    "line": 105,
+                    "function": "run_backup_cmd",
+                    "evidence": "os.system(f'tar -czf backup.tar.gz {path}')",
+                    "remediation": "Avoid executing dynamic shell commands. Use subprocess with argument lists.",
+                },
+                {
+                    "rule_id": "hardcoded-secret",
+                    "title": "Hardcoded API Key / Secret Disclosed",
+                    "description": "High-entropy secret token identified in source file.",
+                    "score": 5.0,
+                    "severity": "MEDIUM",
+                    "file": f"src/{target_value}/config.py",
+                    "line": 14,
+                    "function": "None",
+                    "evidence": "API_SECRET = 'ak_live_9981293182391283'",
+                    "remediation": "Store secrets in environment variables or a secure key management service.",
+                },
+            ]
+            output_file_path.write_text(json.dumps(findings, indent=2) + "\n", encoding="utf-8")
+
+        elif profile.name == "sast-semgrep":
+            semgrep_data = {
+                "results": [
+                    {
+                        "check_id": "python.lang.security.audit.sqli.raw-sql-format",
+                        "path": f"src/{target_value}/db/queries.py",
+                        "start": {"line": 42, "col": 5},
+                        "end": {"line": 42, "col": 48},
+                        "extra": {
+                            "message": "User input directly formatted into SQL query string without parameterization.",
+                            "severity": "ERROR",
+                            "lines": "cursor.execute(f'SELECT * FROM users WHERE id = {user_id}')",
+                            "metadata": {
+                                "cwe": ["CWE-89: SQL Injection"],
+                                "owasp": ["A03:2021 - Injection"],
+                                "category": "security",
+                            },
+                        },
+                    },
+                    {
+                        "check_id": "python.lang.security.audit.dangerous-system-call",
+                        "path": f"src/{target_value}/utils/system.py",
+                        "start": {"line": 105, "col": 5},
+                        "end": {"line": 105, "col": 35},
+                        "extra": {
+                            "message": "Unsanitized external input passed directly to os.system.",
+                            "severity": "ERROR",
+                            "lines": "os.system(f'tar -czf backup.tar.gz {path}')",
+                            "metadata": {
+                                "cwe": ["CWE-78: Command Injection"],
+                                "owasp": ["A03:2021 - Injection"],
+                                "category": "security",
+                            },
+                        },
+                    },
+                    {
+                        "check_id": "generic.secrets.security.detected-hardcoded-secret",
+                        "path": f"src/{target_value}/config.py",
+                        "start": {"line": 14, "col": 1},
+                        "end": {"line": 14, "col": 45},
+                        "extra": {
+                            "message": "Hardcoded high-entropy secret detected.",
+                            "severity": "WARNING",
+                            "lines": "API_SECRET = 'ak_live_9981293182391283'",
+                            "metadata": {
+                                "cwe": ["CWE-798: Use of Hard-coded Credentials"],
+                                "owasp": ["A07:2021 - Identification and Authentication Failures"],
+                                "category": "security",
+                            },
+                        },
+                    },
+                ],
+                "errors": [],
+                "paths": {
+                    "scanned": [f"src/{target_value}/db/queries.py", f"src/{target_value}/utils/system.py", f"src/{target_value}/config.py"]
+                },
+            }
+            output_file_path.write_text(json.dumps(semgrep_data, indent=2) + "\n", encoding="utf-8")
+
+        elif profile.name == "sast-trufflehog":
+            truffle_records = [
+                {
+                    "SourceMetadata": {
+                        "Data": {
+                            "Filesystem": {
+                                "file": f"src/{target_value}/config.py",
+                                "line": 14,
+                            }
+                        }
+                    },
+                    "DetectorName": "AWS",
+                    "DetectorType": 2,
+                    "Verified": True,
+                    "Raw": "<REDACTED>",
+                    "Redacted": "AKIAIOSFODNN7EXAMPLE",
+                    "ExtraData": {"account": "123456789012"},
+                },
+                {
+                    "SourceMetadata": {
+                        "Data": {
+                            "Filesystem": {
+                                "file": f"src/{target_value}/auth.py",
+                                "line": 28,
+                            }
+                        }
+                    },
+                    "DetectorName": "GitHub",
+                    "DetectorType": 5,
+                    "Verified": False,
+                    "Raw": "<REDACTED>",
+                    "Redacted": "ghp_xxxxxxxxxxxxxxxxxxxx",
+                    "ExtraData": {},
+                },
+                {
+                    "SourceMetadata": {
+                        "Data": {
+                            "Filesystem": {
+                                "file": f"src/{target_value}/secrets.env",
+                                "line": 5,
+                            }
+                        }
+                    },
+                    "DetectorName": "Slack",
+                    "DetectorType": 12,
+                    "Verified": False,
+                    "Raw": "<REDACTED>",
+                    "Redacted": "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx",
+                    "ExtraData": {},
+                },
+            ]
+            ndjson = "\n".join(json.dumps(r) for r in truffle_records) + "\n"
+            output_file_path.write_text(ndjson, encoding="utf-8")
 
     # ------------------------------------------------------------------
     # Main scan execution — routes to Axiom or standalone per profile
@@ -337,39 +540,98 @@ class FleetManager:
             scanner_bin = self._resolve_scanner_binary_for_profile(profile)
             return [
                 scanner_bin,
-                "-iL", str(target_file),
-                "-sV", "-T4",
+                "-iL",
+                str(target_file),
+                "-sV",
+                "-T4",
                 "--open",
-                "-oX", str(output_file_path),
+                "-oX",
+                str(output_file_path),
             ]
 
         elif profile.name == "fast-portscan":
             scanner_bin = self._resolve_scanner_binary_for_profile(profile)
             return [
                 scanner_bin,
-                "-iL", str(target_file),
+                "-iL",
+                str(target_file),
                 "--rate=1000",
-                "-p", "1-65535",
-                "-oJ", str(output_file_path),
+                "-p",
+                "1-65535",
+                "-oJ",
+                str(output_file_path),
             ]
 
         elif profile.name == "content-discovery":
             scanner_bin = self._resolve_scanner_binary_for_profile(profile)
             wordlist = self._resolve_ffuf_wordlist()
+            url = f"{target_value.rstrip('/')}/FUZZ" if target_value.startswith(("http://", "https://")) else f"https://{target_value}/FUZZ"
             return [
                 scanner_bin,
-                "-w", wordlist,
-                "-u", f"https://{target_value}/FUZZ",
-                "-of", "json",
-                "-o", str(output_file_path),
+                "-w",
+                wordlist,
+                "-u",
+                url,
+                "-of",
+                "json",
+                "-o",
+                str(output_file_path),
             ] + profile.extra_flags
 
         elif profile.name == "vuln-assessment":
             scanner_bin = self._resolve_scanner_binary_for_profile(profile)
             return [
                 scanner_bin,
-                "-l", str(target_file),
-                "-json-export", str(output_file_path),
+                "-l",
+                str(target_file),
+                "-jle",
+                str(output_file_path),
+            ] + profile.extra_flags
+
+        elif profile.name == "sast-joern":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            return [
+                scanner_bin,
+                str(target_value),
+                "--ignore-dir-names",
+                "node_modules,venv,.venv,.git,dist,build,target,.next,vendor,Pods",
+                "-J-Xmx4G",
+            ] + profile.extra_flags
+
+        elif profile.name == "sast-semgrep":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            return [
+                scanner_bin,
+                "scan",
+                "--json",
+                "--json-output",
+                str(output_file_path),
+                "--exclude",
+                "node_modules",
+                "--exclude",
+                "venv",
+                "--exclude",
+                ".venv",
+                "--exclude",
+                "dist",
+                "--exclude",
+                "build",
+                "--exclude",
+                "target",
+                "--exclude",
+                ".git",
+                str(target_value),
+            ] + profile.extra_flags
+
+        elif profile.name == "sast-trufflehog":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            return [
+                scanner_bin,
+                "filesystem",
+                str(target_value),
+                "--json",
+                "--exclude-paths",
+                "node_modules,venv,.venv,dist,build,target,.git",
             ] + profile.extra_flags
 
         else:
@@ -384,7 +646,3 @@ class FleetManager:
         finally:
             logger.info("Initiating mandatory teardown for fleet '%s'", fleet_name)
             self.destroy_fleet(fleet_name)
-
-
-
-

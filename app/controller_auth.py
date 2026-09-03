@@ -1,4 +1,5 @@
 """Replay-protected HMAC authentication for the controller's outbound API calls."""
+
 import hashlib
 import hmac
 import time

@@ -15,7 +15,7 @@ SAFE_PROFILES = {
     "vuln-assessment",
 }
 
-# Shared profile literal used across request schemas and controller job schemas.
+# DAST profile literal used for standard /v1/scans endpoint
 ProfileLiteral = Literal[
     "recon",
     "web-discovery",
@@ -23,6 +23,34 @@ ProfileLiteral = Literal[
     "fast-portscan",
     "content-discovery",
     "vuln-assessment",
+]
+
+# SAST profile definitions for /v1/sast/scans
+SAST_SAFE_PROFILES = {
+    "sast-joern",
+    "sast-semgrep",
+    "sast-trufflehog",
+}
+
+SASTProfileLiteral = Literal[
+    "sast-joern",
+    "sast-semgrep",
+    "sast-trufflehog",
+]
+
+# Union of all profiles used by controller worker
+ALL_SAFE_PROFILES = SAFE_PROFILES | SAST_SAFE_PROFILES
+
+AllProfileLiteral = Literal[
+    "recon",
+    "web-discovery",
+    "network-portscan",
+    "fast-portscan",
+    "content-discovery",
+    "vuln-assessment",
+    "sast-joern",
+    "sast-semgrep",
+    "sast-trufflehog",
 ]
 
 
@@ -48,6 +76,12 @@ class TargetRead(BaseModel):
 class ScanCreate(BaseModel):
     target_id: UUID
     profile: ProfileLiteral
+
+
+class SASTScanCreate(BaseModel):
+    target_id: UUID
+    profile: SASTProfileLiteral = Field(default="sast-joern", description="SAST analysis profile (sast-joern or sast-semgrep)")
+    rule_tags: list[str] | None = Field(default=None, description="Optional rule tags (e.g. ['sqli', 'rce', 'default'])")
 
 
 class ScanRead(BaseModel):
@@ -86,7 +120,7 @@ class ScanResultRead(BaseModel):
 class ControllerJobRead(BaseModel):
     id: UUID
     target: str
-    profile: ProfileLiteral
+    profile: AllProfileLiteral
     authorization_reference: str
 
 

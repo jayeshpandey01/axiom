@@ -22,10 +22,7 @@ client = httpx.Client(timeout=30)
 
 # 1. Fetch scan status
 try:
-    res = client.get(
-        f"{API_BASE}/v1/scans/{SCAN_ID}",
-        headers={"X-API-Key": OPERATOR_KEY}
-    )
+    res = client.get(f"{API_BASE}/v1/scans/{SCAN_ID}", headers={"X-API-Key": OPERATOR_KEY})
     if res.status_code != 200:
         print(f"[-] Failed to fetch scan status: {res.status_code} {res.text}")
         sys.exit(1)
@@ -40,10 +37,7 @@ try:
     if status == "completed":
         print("\n[+] SUCCESS! Cloud runner picked up and completed the job.")
         # 2. Fetch results
-        r_res = client.get(
-            f"{API_BASE}/v1/scans/{SCAN_ID}/result",
-            headers={"X-API-Key": OPERATOR_KEY}
-        )
+        r_res = client.get(f"{API_BASE}/v1/scans/{SCAN_ID}/result", headers={"X-API-Key": OPERATOR_KEY})
         if r_res.status_code == 200:
             result = r_res.json()
             summary = result.get("summary", {})

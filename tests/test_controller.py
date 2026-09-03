@@ -94,12 +94,13 @@ def test_dry_run_nmap_scan(tmp_path: Path) -> None:
         assert output_file.exists()
         content = output_file.read_text(encoding="utf-8")
         assert "nmaprun" in content  # XML root element
-        assert "open" in content      # at least one open port in mock
+        assert "open" in content  # at least one open port in mock
 
 
 def test_dry_run_masscan_scan(tmp_path: Path) -> None:
     """Dry-run fast-portscan must produce parseable masscan JSON output."""
     import json
+
     manager = FleetManager(dry_run=True)
     manager.work_dir = tmp_path
     output_file = tmp_path / "masscan_out.json"
@@ -115,6 +116,7 @@ def test_dry_run_masscan_scan(tmp_path: Path) -> None:
 def test_dry_run_ffuf_scan(tmp_path: Path) -> None:
     """Dry-run content-discovery must produce parseable FFUF JSON output."""
     import json
+
     manager = FleetManager(dry_run=True)
     manager.work_dir = tmp_path
     output_file = tmp_path / "ffuf_out.json"
@@ -130,6 +132,7 @@ def test_dry_run_ffuf_scan(tmp_path: Path) -> None:
 def test_dry_run_nuclei_scan(tmp_path: Path) -> None:
     """Dry-run vuln-assessment must produce parseable Nuclei JSONL output."""
     import json
+
     manager = FleetManager(dry_run=True)
     manager.work_dir = tmp_path
     output_file = tmp_path / "nuclei_out.jsonl"
@@ -193,11 +196,11 @@ def test_port_scan_analyzer_classifies_risky_ports() -> None:
     assert summary["risk_summary"]["total"] >= 1
     assert len(summary["open_ports"]) == 3
     finding_codes = [f["code"] for f in summary["findings"]]
-    assert "OPEN_PORT_RISK_HIGH" in finding_codes   # port 22 and 3306
+    assert "OPEN_PORT_RISK_HIGH" in finding_codes  # port 22 and 3306
     assert "SERVICE_VERSION_DISCLOSURE" in finding_codes
     assert "UNENCRYPTED_NETWORK_SERVICE" in finding_codes  # port 80
     assert "OPEN_PORT_SUMMARY" in finding_codes
-    assert summary["risk_summary"]["high"] >= 2   # port 22 + 3306
+    assert summary["risk_summary"]["high"] >= 2  # port 22 + 3306
 
 
 def test_content_discovery_analyzer_flags_sensitive_paths() -> None:

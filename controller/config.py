@@ -23,4 +23,3 @@ class ControllerSettings(BaseSettings):
 
 
 settings = ControllerSettings()
-

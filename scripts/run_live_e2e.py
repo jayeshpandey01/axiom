@@ -3,6 +3,7 @@
 Executes a complete scan lifecycle on an authorized test host and displays
 the normalized security findings and technology footprint.
 """
+
 import json
 import os
 import sys

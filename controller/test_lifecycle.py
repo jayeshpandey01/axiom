@@ -2,6 +2,7 @@
 
 Runs an authorized test scan, verifies output, and proves guaranteed fleet teardown.
 """
+
 import argparse
 import logging
 import sys

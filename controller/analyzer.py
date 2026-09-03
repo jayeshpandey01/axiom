@@ -4,6 +4,7 @@ Analyzes raw scanner probe records (HTTP response headers, status codes,
 technologies, server banners) against security rules and outputs categorized,
 severity-ranked findings and risk scores.
 """
+
 import json
 from typing import Any
 
@@ -26,16 +27,18 @@ class VulnerabilityAnalyzer:
         ):
             nonlocal finding_id_counter
             log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
-            findings.append({
-                "id": f"SEC-{finding_id_counter:03d}",
-                "code": code,
-                "logs": log_entry,
-                "severity": severity.upper(),
-                "title": title,
-                "description": description,
-                "evidence": evidence,
-                "remediation": remediation,
-            })
+            findings.append(
+                {
+                    "id": f"SEC-{finding_id_counter:03d}",
+                    "code": code,
+                    "logs": log_entry,
+                    "severity": severity.upper(),
+                    "title": title,
+                    "description": description,
+                    "evidence": evidence,
+                    "remediation": remediation,
+                }
+            )
             finding_id_counter += 1
 
         all_technologies = set()
@@ -259,19 +262,23 @@ class PortScanAnalyzer:
         findings: list[dict[str, Any]] = []
         finding_id_counter = 1
 
-        def add_finding(code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None) -> None:
+        def add_finding(
+            code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None
+        ) -> None:
             nonlocal finding_id_counter
             log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
-            findings.append({
-                "id": f"SEC-{finding_id_counter:03d}",
-                "code": code,
-                "logs": log_entry,
-                "severity": severity.upper(),
-                "title": title,
-                "description": description,
-                "evidence": evidence,
-                "remediation": remediation,
-            })
+            findings.append(
+                {
+                    "id": f"SEC-{finding_id_counter:03d}",
+                    "code": code,
+                    "logs": log_entry,
+                    "severity": severity.upper(),
+                    "title": title,
+                    "description": description,
+                    "evidence": evidence,
+                    "remediation": remediation,
+                }
+            )
             finding_id_counter += 1
 
         open_ports: list[dict[str, Any]] = []
@@ -399,19 +406,23 @@ class ContentDiscoveryAnalyzer:
         findings: list[dict[str, Any]] = []
         finding_id_counter = 1
 
-        def add_finding(code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None) -> None:
+        def add_finding(
+            code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None
+        ) -> None:
             nonlocal finding_id_counter
             log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
-            findings.append({
-                "id": f"SEC-{finding_id_counter:03d}",
-                "code": code,
-                "logs": log_entry,
-                "severity": severity.upper(),
-                "title": title,
-                "description": description,
-                "evidence": evidence,
-                "remediation": remediation,
-            })
+            findings.append(
+                {
+                    "id": f"SEC-{finding_id_counter:03d}",
+                    "code": code,
+                    "logs": log_entry,
+                    "severity": severity.upper(),
+                    "title": title,
+                    "description": description,
+                    "evidence": evidence,
+                    "remediation": remediation,
+                }
+            )
             finding_id_counter += 1
 
         discovered_paths: list[dict[str, Any]] = []
@@ -531,31 +542,41 @@ class NucleiAnalyzer:
             extracted = record.get("extracted-results", [])
             remediation = info.get("remediation", None)
 
-            # Extract CVE identifiers
-            classification = info.get("classification", {})
-            if isinstance(classification, dict):
-                for cve in classification.get("cve-id", []):
+            # Extract CVE identifiers safely
+            classification = info.get("classification") if isinstance(info.get("classification"), dict) else {}
+            cve_val = classification.get("cve-id") if isinstance(classification, dict) else None
+            if isinstance(cve_val, str) and cve_val.upper().startswith("CVE-"):
+                if cve_val.upper() not in cve_ids:
+                    cve_ids.append(cve_val.upper())
+            elif isinstance(cve_val, list):
+                for cve in cve_val:
                     if isinstance(cve, str) and cve.upper().startswith("CVE-"):
                         if cve.upper() not in cve_ids:
                             cve_ids.append(cve.upper())
+
             # Also check template-id itself
             if template_id.upper().startswith("CVE-") and template_id.upper() not in cve_ids:
                 cve_ids.append(template_id.upper())
 
             evidence: Any = f"Matched at: {matched_at}"
             if extracted:
-                evidence = {"matched_at": matched_at, "extracted": extracted[:10]}
+                if isinstance(extracted, list):
+                    evidence = {"matched_at": matched_at, "extracted": extracted[:10]}
+                else:
+                    evidence = {"matched_at": matched_at, "extracted": str(extracted)}
 
-            findings.append({
-                "id": f"SEC-{finding_id_counter:03d}",
-                "code": f"NUCLEI_{template_id.upper().replace('-', '_')}",
-                "logs": json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
-                "severity": severity,
-                "title": name,
-                "description": description,
-                "evidence": evidence,
-                "remediation": remediation,
-            })
+            findings.append(
+                {
+                    "id": f"SEC-{finding_id_counter:03d}",
+                    "code": f"NUCLEI_{template_id.upper().replace('-', '_')}",
+                    "logs": json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
+                    "severity": severity,
+                    "title": name,
+                    "description": description,
+                    "evidence": evidence,
+                    "remediation": remediation,
+                }
+            )
             finding_id_counter += 1
 
         risk_summary = {
@@ -572,4 +593,3 @@ class NucleiAnalyzer:
             "cve_ids": cve_ids,
             "templates_matched": len(findings),
         }
-

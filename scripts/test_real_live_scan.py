@@ -24,16 +24,12 @@ client = httpx.Client(timeout=30)
 t_res = client.post(
     f"{API_BASE}/v1/targets",
     headers={"X-API-Key": ADMIN_KEY},
-    json={"value": TARGET, "owner_reference": "Juni Parenting", "authorization_reference": "AUTH-LIVE-SCAN-001"}
+    json={"value": TARGET, "owner_reference": "Juni Parenting", "authorization_reference": "AUTH-LIVE-SCAN-001"},
 )
 target_id = t_res.json()["id"]
 
 # 2. Queue scan
-s_res = client.post(
-    f"{API_BASE}/v1/scans",
-    headers={"X-API-Key": OPERATOR_KEY},
-    json={"target_id": target_id, "profile": "recon"}
-)
+s_res = client.post(f"{API_BASE}/v1/scans", headers={"X-API-Key": OPERATOR_KEY}, json={"target_id": target_id, "profile": "recon"})
 scan_id = s_res.json()["id"]
 print(f"[+] Scan queued for {TARGET} with ID: {scan_id}")
 
@@ -43,10 +39,7 @@ agent = ControllerAgent()
 agent.run_batch(max_idle_sec=6, poll_interval_sec=2)
 
 # 4. Fetch the real live result
-r_res = client.get(
-    f"{API_BASE}/v1/scans/{scan_id}/result",
-    headers={"X-API-Key": OPERATOR_KEY}
-)
+r_res = client.get(f"{API_BASE}/v1/scans/{scan_id}/result", headers={"X-API-Key": OPERATOR_KEY})
 result = r_res.json()
 print("\n" + "=" * 65)
 print(f"       REAL LIVE VULNERABILITY & SCAN REPORT: {TARGET}")

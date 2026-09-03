@@ -3,6 +3,7 @@
 Prevents targeting private networks, loopback addresses, cloud metadata endpoints,
 or reserved IP ranges.
 """
+
 import ipaddress
 import re
 
@@ -16,9 +17,7 @@ FORBIDDEN_HOSTNAME_PATTERNS = [
     re.compile(r"^instance-data$", re.IGNORECASE),
 ]
 
-HOSTNAME_REGEX = re.compile(
-    r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63}(?<!-))*$"
-)
+HOSTNAME_REGEX = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63}(?<!-))*$")
 
 
 def validate_target_scope(target: str) -> str:

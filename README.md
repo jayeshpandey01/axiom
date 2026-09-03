@@ -12,6 +12,7 @@ FastAPI service for scheduling **authorized** security testing jobs. It delibera
 
 ### Supported scan profiles
 
+#### Dynamic Application & Network Testing (DAST)
 | Profile | Scanner | Purpose |
 |---|---|---|
 | `recon` | httpx | Fast HTTP service, security headers, and title discovery |
@@ -20,6 +21,21 @@ FastAPI service for scheduling **authorized** security testing jobs. It delibera
 | `fast-portscan` | masscan | High-speed full port availability scan (`--rate=1000`) |
 | `content-discovery` | ffuf | Web directory, route, and endpoint enumeration via fuzzing |
 | `vuln-assessment` | nuclei | Template-based vulnerability detection (info → critical severity) |
+
+#### Static Application Security Testing (SAST)
+| Profile | Scanner | Purpose |
+|---|---|---|
+| `sast-joern` | joern | Code Property Graph (CPG) static code & taint-flow analysis |
+| `sast-semgrep` | semgrep | Fast semantic AST pattern matching & rule-based security audit |
+| `sast-trufflehog` | trufflehog | Automated secret scanning & live credential leak verification |
+
+
+
+### API Endpoint Structure
+* **DAST (Network/Web)**: `/v1/scans`, `/v1/scans/{scan_id}`, `/v1/scans/{scan_id}/result`, `/v1/profiles`
+* **SAST (Code Analysis)**: `/v1/sast/scans`, `/v1/sast/scans/{scan_id}`, `/v1/sast/scans/{scan_id}/result`, `/v1/sast/profiles`
+* **Target Management**: `/v1/targets`
+* **Audit & Health**: `/v1/audit-events`, `/health`
 
 The controller integration is intentionally isolated. Do not add shell execution to the API or worker.
 

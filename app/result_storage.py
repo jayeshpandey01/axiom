@@ -1,4 +1,5 @@
 """Encrypted raw-result storage. Only controller-side services may call this module."""
+
 import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta

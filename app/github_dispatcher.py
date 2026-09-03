@@ -4,6 +4,7 @@ Checks if a scanner runner is already active in GitHub Actions and dispatches
 an on-demand run if needed, ensuring scans are processed 24/7 in the cloud
 without manual intervention.
 """
+
 import logging
 
 import httpx

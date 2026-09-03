@@ -3,6 +3,7 @@
 Pulls signed jobs from the API via outbound HTTPS, executes fixed scanner
 profiles via FleetManager, normalizes findings, and reports completion/failure.
 """
+
 import hashlib
 import hmac
 import json
@@ -18,6 +19,7 @@ import httpx
 from controller.analyzer import ContentDiscoveryAnalyzer, NucleiAnalyzer, PortScanAnalyzer, VulnerabilityAnalyzer
 from controller.config import settings
 from controller.fleet_manager import FleetManager
+from controller.sast_analyzer import JoernAnalyzer, SemgrepAnalyzer, TruffleHogAnalyzer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("controller.agent")
@@ -108,15 +110,17 @@ def parse_nmap_output(output_file: Path) -> dict[str, Any]:
             if state_elem is None or state_elem.get("state") != "open":
                 continue
             svc_elem = port_elem.find("service")
-            records.append({
-                "ip": ip,
-                "host_state": host_state,
-                "port": int(port_elem.get("portid", 0)),
-                "protocol": port_elem.get("protocol", "tcp"),
-                "service": svc_elem.get("name", "") if svc_elem is not None else "",
-                "product": svc_elem.get("product", "") if svc_elem is not None else "",
-                "version": svc_elem.get("version", "") if svc_elem is not None else "",
-            })
+            records.append(
+                {
+                    "ip": ip,
+                    "host_state": host_state,
+                    "port": int(port_elem.get("portid", 0)),
+                    "protocol": port_elem.get("protocol", "tcp"),
+                    "service": svc_elem.get("name", "") if svc_elem is not None else "",
+                    "product": svc_elem.get("product", "") if svc_elem is not None else "",
+                    "version": svc_elem.get("version", "") if svc_elem is not None else "",
+                }
+            )
 
     hosts_up = len({r["ip"] for r in records if r["host_state"] == "up"})
     analyzer = PortScanAnalyzer()
@@ -160,15 +164,17 @@ def parse_masscan_output(output_file: Path) -> dict[str, Any]:
     for entry in data:
         ip = entry.get("ip", "")
         for port_info in entry.get("ports", []):
-            records.append({
-                "ip": ip,
-                "host_state": "up",
-                "port": int(port_info.get("port", 0)),
-                "protocol": port_info.get("proto", "tcp"),
-                "service": port_info.get("status", ""),
-                "product": "",
-                "version": "",
-            })
+            records.append(
+                {
+                    "ip": ip,
+                    "host_state": "up",
+                    "port": int(port_info.get("port", 0)),
+                    "protocol": port_info.get("proto", "tcp"),
+                    "service": port_info.get("status", ""),
+                    "product": "",
+                    "version": "",
+                }
+            )
 
     hosts_up = len({r["ip"] for r in records})
     analyzer = PortScanAnalyzer()
@@ -206,7 +212,7 @@ def parse_ffuf_output(output_file: Path) -> dict[str, Any]:
 
 
 def parse_nuclei_output(output_file: Path) -> dict[str, Any]:
-    """Parse Nuclei JSONL output (-json-export) and run vulnerability analysis."""
+    """Parse Nuclei JSON/JSONL output and run vulnerability analysis."""
     default_empty = {
         "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
         "findings": [],
@@ -221,17 +227,81 @@ def parse_nuclei_output(output_file: Path) -> dict[str, Any]:
         return default_empty
 
     records: list[dict[str, Any]] = []
-    for line in content.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            records.append(json.loads(line))
-        except json.JSONDecodeError:
-            pass
+    try:
+        data = json.loads(content)
+        if isinstance(data, list):
+            records = data
+        elif isinstance(data, dict):
+            records = [data]
+    except json.JSONDecodeError:
+        for line in content.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
 
     analyzer = NucleiAnalyzer()
     return analyzer.analyze(records)
+
+
+def parse_joern_output(output_file: Path) -> dict[str, Any]:
+    """Parse Joern SAST output (JSON or joern-scan lines) and run code security analysis."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "scanned_files_count": 0,
+        "total_rules_evaluated": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8").strip()
+    if not content:
+        return default_empty
+
+    analyzer = JoernAnalyzer()
+    return analyzer.analyze(content)
+
+
+def parse_semgrep_output(output_file: Path) -> dict[str, Any]:
+    """Parse Semgrep SAST JSON output and run normalized security rule analysis."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "scanned_files_count": 0,
+        "total_rules_evaluated": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8").strip()
+    if not content:
+        return default_empty
+
+    analyzer = SemgrepAnalyzer()
+    return analyzer.analyze(content)
+
+
+def parse_trufflehog_output(output_file: Path) -> dict[str, Any]:
+    """Parse TruffleHog secret and leaked credential detection NDJSON output."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "scanned_files_count": 0,
+        "total_rules_evaluated": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8").strip()
+    if not content:
+        return default_empty
+
+    analyzer = TruffleHogAnalyzer()
+    return analyzer.analyze(content)
 
 
 # Dispatch table: profile name → parser function
@@ -242,6 +312,9 @@ _PARSER_MAP: dict[str, Any] = {
     "fast-portscan": parse_masscan_output,
     "content-discovery": parse_ffuf_output,
     "vuln-assessment": parse_nuclei_output,
+    "sast-joern": parse_joern_output,
+    "sast-semgrep": parse_semgrep_output,
+    "sast-trufflehog": parse_trufflehog_output,
 }
 
 

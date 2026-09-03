@@ -1,4 +1,5 @@
 """Redis-backed fixed-window request limiting keyed by authenticated subject."""
+
 from functools import lru_cache
 
 from fastapi import Depends, HTTPException, status
