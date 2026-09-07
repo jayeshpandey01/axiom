@@ -73,3 +73,55 @@ def validate_target_scope(target: str) -> str:
         raise ValueError("Target hostname exceeds 253 characters maximum length.")
 
     return normalized
+
+
+FORBIDDEN_SYSTEM_PATHS = [
+    "/etc",
+    "/sys",
+    "/proc",
+    "/dev",
+    "/boot",
+    "/root",
+    "/bin",
+    "/sbin",
+    "/usr/bin",
+    "/usr/sbin",
+    "c:\\windows",
+    "c:\\windows\\system32",
+]
+
+
+def validate_sast_target_scope(target: str) -> str:
+    """Validate that a source code target is safe and within authorized repository or local directory scope.
+
+    Args:
+        target: Filesystem path string or repository URL.
+
+    Returns:
+        Normalized target string.
+
+    Raises:
+        ValueError: If target is empty, targets restricted system directories, or contains invalid syntax.
+    """
+    normalized = target.strip()
+    if not normalized:
+        raise ValueError("Source target value cannot be empty.")
+
+    if len(normalized) > 253:
+        raise ValueError("Target value exceeds 253 characters maximum length.")
+
+    # Check if target is a git repository URL
+    if normalized.startswith(("https://", "git@", "ssh://")):
+        if not re.match(r"^(https://|git@|ssh://)[A-Za-z0-9_.-]+(/|:)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(\.git)?$", normalized):
+            raise ValueError("Target repository URL is not a valid git URL format.")
+        return normalized
+
+    # Local directory/file path validation
+    clean_path = normalized.replace("\\", "/").rstrip("/")
+    lower_path = clean_path.lower()
+
+    for forbidden in FORBIDDEN_SYSTEM_PATHS:
+        if lower_path == forbidden or lower_path.startswith(forbidden + "/"):
+            raise ValueError(f"Target path '{normalized}' points to a restricted system directory.")
+
+    return normalized

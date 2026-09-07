@@ -2,9 +2,9 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, model_validator
 
-from app.scope import validate_target_scope
+from app.scope import validate_sast_target_scope, validate_target_scope
 
 SAFE_PROFILES = {
     "recon",
@@ -64,14 +64,21 @@ AllProfileLiteral = Literal[
 
 
 class TargetCreate(BaseModel):
-    value: str = Field(min_length=1, max_length=253, examples=["example.com"])
+    value: str = Field(min_length=1, max_length=253, examples=["example.com", "codefy/apps"])
     owner_reference: str = Field(min_length=3, max_length=200)
     authorization_reference: str = Field(min_length=3, max_length=200)
+    target_type: Literal["network", "source_code"] = Field(
+        default="network",
+        description="Target type: 'network' for DAST scans (hostnames/IPs) or 'source_code' for SAST scans (local paths/git repos)",
+    )
 
-    @field_validator("value")
-    @classmethod
-    def normalize_target(cls, value: str) -> str:
-        return validate_target_scope(value)
+    @model_validator(mode="after")
+    def validate_target_value(self) -> "TargetCreate":
+        if self.target_type == "source_code":
+            self.value = validate_sast_target_scope(self.value)
+        else:
+            self.value = validate_target_scope(self.value)
+        return self
 
 
 class TargetRead(BaseModel):

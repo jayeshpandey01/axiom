@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 load_dotenv(".env.local")
 load_dotenv(".env")
 
-API_BASE = os.getenv("CONTROLLER_API_ENDPOINT", "https://axiom-xjkc.onrender.com").rstrip("/")
-OPERATOR_KEY = os.getenv("API_KEY", "Jf2T0sTy0IauJ6ELjLWAibC9-EpFo5LXwneztTBeyAU")
-SCAN_ID = "31cf7010-a1ce-40c3-a2d6-4b08656c2d8c"
+API_BASE = os.getenv("CONTROLLER_API_ENDPOINT", "http://localhost:8000").rstrip("/")
+OPERATOR_KEY = os.getenv("API_KEY", "")
+SCAN_ID = sys.argv[1] if len(sys.argv) > 1 else os.getenv("SCAN_ID", "")
 
 print("=" * 65)
 print("CHECKING CLOUD SCAN STATUS & RESULTS")

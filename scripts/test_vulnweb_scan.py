@@ -7,9 +7,9 @@ from dotenv import load_dotenv
 load_dotenv(".env.local")
 load_dotenv(".env")
 
-API_BASE = os.getenv("CONTROLLER_API_ENDPOINT", "https://axiom-xjkc.onrender.com").rstrip("/")
-ADMIN_KEY = os.getenv("ADMIN_API_KEY", "nBK_0V8AQVDZmC6gTpgkTn04t7Gx2IYSYiPvdT5zymU")
-OPERATOR_KEY = os.getenv("API_KEY", "Jf2T0sTy0IauJ6ELjLWAibC9-EpFo5LXwneztTBeyAU")
+API_BASE = os.getenv("CONTROLLER_API_ENDPOINT", "http://localhost:8000").rstrip("/")
+ADMIN_KEY = os.getenv("ADMIN_API_KEY", "")
+OPERATOR_KEY = os.getenv("API_KEY", "")
 TARGET = "testphp.vulnweb.com"
 PROFILE = "recon"
 

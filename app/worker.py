@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import AuditEvent, ScanJob, ScanStatus
+from app.models import AuditEvent, ControllerNonce, ScanJob, ScanStatus
 from app.result_storage import purge_expired_artifacts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] worker: %(message)s")
@@ -64,6 +64,19 @@ def purge_results() -> int:
         return deleted
 
 
+def purge_expired_nonces() -> int:
+    """Purge expired controller HMAC nonces from database."""
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        expired = db.scalars(select(ControllerNonce).where(ControllerNonce.expires_at <= now)).all()
+        for nonce in expired:
+            db.delete(nonce)
+        if expired:
+            db.commit()
+            logger.info("Purged %d expired controller nonce(s).", len(expired))
+        return len(expired)
+
+
 def main() -> None:
     logger.info("Starting Background Maintenance Worker...")
     cycle = 0
@@ -72,6 +85,7 @@ def main() -> None:
             # Check for stale jobs every 60 seconds (every 30 cycles at 2s sleep)
             if cycle % 30 == 0:
                 reap_stale_jobs()
+                purge_expired_nonces()
 
             # Hourly artifact purge (every 1800 cycles)
             if cycle % 1800 == 0:

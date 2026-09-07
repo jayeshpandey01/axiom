@@ -482,11 +482,17 @@ class TruffleHogAnalyzer:
 
             remediation = self._get_secret_remediation(detector)
 
+            # Sanitize record for logs to strictly avoid secret leakage
+            safe_record = dict(r)
+            for secret_field in ("Raw", "raw", "Secret", "secret", "Value", "value"):
+                if secret_field in safe_record:
+                    safe_record[secret_field] = "<REDACTED>"
+
             findings.append(
                 {
                     "id": f"SEC-{finding_id_counter:03d}",
                     "code": code_slug,
-                    "logs": json.dumps(r, indent=2),
+                    "logs": json.dumps(safe_record, indent=2),
                     "severity": severity,
                     "title": title,
                     "description": description,

@@ -3,15 +3,20 @@ import os
 import time
 import urllib.request
 
+from dotenv import load_dotenv
+
+load_dotenv(".env.local")
+load_dotenv(".env")
+
 # --- Configuration ---
-API_BASE = os.getenv("API_BASE_URL", "https://axiom-xjkc.onrender.com")
+API_BASE = os.getenv("API_BASE_URL", os.getenv("CONTROLLER_API_ENDPOINT", "http://localhost:8000")).rstrip("/")
 
-# Render Keys
-API_KEY = os.getenv("API_KEY", "Jf2T0sTy0IauJ6ELjLWAibC9-EpFo5LXwneztTBeyAU")
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "nBK_0V8AQVDZmC6gTpgkTn04t7Gx2IYSYiPvdT5zymU")
+# Authentication Keys
+API_KEY = os.getenv("API_KEY", "")
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
 
-# Use a safe placeholder target
-TARGET_IP = os.getenv("TARGET_HOST", "portfoliojayesh.netlify.app")
+# Target host
+TARGET_IP = os.getenv("TARGET_HOST", "portfoliojayesh.netify.app")
 
 
 HEADERS = {"accept": "application/json", "Content-Type": "application/json", "X-API-Key": API_KEY}

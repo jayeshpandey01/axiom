@@ -21,17 +21,17 @@ from controller.agent import (  # noqa: E402
 
 
 def find_bin(name: str) -> str:
-    """Find binary in ~/go/bin or system PATH."""
-    go_path = Path.home() / "go" / "bin" / f"{name}.exe"
-    if go_path.is_file():
-        return str(go_path)
-    go_path_nix = Path.home() / "go" / "bin" / name
-    if go_path_nix.is_file():
-        return str(go_path_nix)
-    sys_bin = shutil.which(name)
-    if sys_bin:
-        return sys_bin
-    return ""
+    """Find binary in virtualenv, ~/go/bin, homebrew, or system PATH."""
+    candidates = [
+        str(Path(sys.executable).parent / name),
+        str(Path(sys.executable).parent / f"{name}.exe"),
+        str(Path.home() / "go" / "bin" / name),
+        str(Path.home() / "go" / "bin" / f"{name}.exe"),
+        f"/opt/homebrew/bin/{name}",
+        f"/usr/local/bin/{name}",
+        shutil.which(name),
+    ]
+    return next((c for c in candidates if c and Path(c).is_file()), "")
 
 
 def test_real_httpx(target: str = "scanme.nmap.org"):

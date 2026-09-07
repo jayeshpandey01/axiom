@@ -1,8 +1,10 @@
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 from uuid import UUID
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.controller_auth import require_controller
@@ -10,7 +12,6 @@ from app.db import get_db
 from app.github_dispatcher import trigger_cloud_scanner_if_needed
 from app.models import AuditEvent, ScanJob, ScanResult
 from app.rate_limit import enforce_rate_limit
-from app.result_storage import persist_completed_result
 from app.schemas import (
     ControllerCompletion,
     ControllerFailure,
@@ -23,7 +24,18 @@ from app.schemas import (
     TargetRead,
 )
 from app.security import Principal
-from app.services import cancel_scan, claim_next_scan, create_target, fail_scan, queue_scan, record_audit
+from app.services import cancel_scan, claim_next_scan, complete_scan, create_target, fail_scan, queue_scan, record_audit
+
+
+def sanitize_error_logs(reason: str | None) -> str | None:
+    """Sanitize failure reasons before returning via public API to prevent credential or internal path leakage."""
+    if not reason:
+        return None
+    cleaned = reason.strip().split("\n")[0][:250]
+    for sensitive_pattern in ("password", "secret", "token", "key", "authorization"):
+        if sensitive_pattern in cleaned.lower() and ("=" in cleaned or ":" in cleaned):
+            return "Execution failed due to an internal scanner error."
+    return cleaned
 
 
 @asynccontextmanager
@@ -63,6 +75,20 @@ app = FastAPI(
     version="0.2.0",
     openapi_tags=tags_metadata,
     lifespan=lifespan,
+)
+
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,https://portfoliojayesh.netify.app").split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 
@@ -188,7 +214,7 @@ def get_result(scan_id: UUID, _: Principal = Depends(enforce_rate_limit), db: Se
             summary={"status": "failed"},
             created_at=scan.updated_at,
             artifact=None,
-            error_logs=scan.failure_reason,
+            error_logs=sanitize_error_logs(scan.failure_reason),
         )
 
     result = db.query(ScanResult).filter(ScanResult.scan_job_id == scan_id).first()
@@ -375,7 +401,7 @@ async def complete_controller_job(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="scan not found")
     if job.status != "running":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="scan is not running")
-    result = persist_completed_result(db, job=job, summary=payload.summary)
+    result = complete_scan(db, job=job, summary=payload.summary)
     record_audit(db, actor_role="controller", action="scan.completed", resource_type="scan", resource_id=str(job.id))
     return result
 

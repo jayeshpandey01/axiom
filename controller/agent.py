@@ -420,18 +420,25 @@ _PARSER_MAP: dict[str, Any] = {
 class ControllerAgent:
     """Outbound polling agent managing the full scan execution cycle."""
 
-    def __init__(self, api_base_url: str | None = None, manager: FleetManager | None = None):
+    def __init__(
+        self,
+        api_base_url: str | None = None,
+        manager: FleetManager | None = None,
+        http_client: httpx.Client | None = None,
+    ):
         self.api_base_url = (api_base_url or settings.api_endpoint or "http://localhost:8000").rstrip("/")
         self.manager = manager or FleetManager()
+        self._http_client = http_client
 
     def _request(self, method: str, path: str, json_data: dict | None = None) -> httpx.Response:
         url = f"{self.api_base_url}{path}"
         body = json.dumps(json_data).encode() if json_data is not None else b""
         headers = generate_signed_headers(method, path, body)
         headers["Content-Type"] = "application/json"
+        if self._http_client is not None:
+            return self._http_client.request(method, url, headers=headers, content=body)
         with httpx.Client(timeout=30) as client:
-            response = client.request(method, url, headers=headers, content=body)
-            return response
+            return client.request(method, url, headers=headers, content=body)
 
     def claim_job(self) -> dict | None:
         """Poll the API for the next available queued scan job."""

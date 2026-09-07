@@ -11,7 +11,9 @@ def create_target(db: Session, payload: TargetCreate) -> Target:
     existing = db.scalar(select(Target).where(Target.value == payload.value))
     if existing:
         return existing
-    target = Target(**payload.model_dump())
+    target_data = payload.model_dump()
+    target_data.pop("target_type", None)
+    target = Target(**target_data)
     db.add(target)
     db.commit()
     db.refresh(target)
