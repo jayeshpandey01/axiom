@@ -12,9 +12,19 @@ SAFE_PROFILES = {
     "network-portscan",
     "fast-portscan",
     "content-discovery",
+    "deep-content-discovery",
+    "web-crawl",
     "vuln-assessment",
     "xss-scan",
     "dast-zap",
+    "oob-interaction",
+    "dns-recon",
+    "subdomain-takeover",
+    "smart-portscan",
+    "waf-detect",
+    "cors-audit",
+    "crlf-scan",
+    "ssti-scan",
 }
 
 # DAST profile literal used for standard /v1/scans endpoint
@@ -24,9 +34,19 @@ ProfileLiteral = Literal[
     "network-portscan",
     "fast-portscan",
     "content-discovery",
+    "deep-content-discovery",
+    "web-crawl",
     "vuln-assessment",
     "xss-scan",
     "dast-zap",
+    "oob-interaction",
+    "dns-recon",
+    "subdomain-takeover",
+    "smart-portscan",
+    "waf-detect",
+    "cors-audit",
+    "crlf-scan",
+    "ssti-scan",
 ]
 
 # SAST profile definitions for /v1/sast/scans
@@ -35,6 +55,7 @@ SAST_SAFE_PROFILES = {
     "sast-semgrep",
     "sast-trufflehog",
     "sast-codeql",
+    "sast-gitleaks",
 }
 
 SASTProfileLiteral = Literal[
@@ -42,6 +63,7 @@ SASTProfileLiteral = Literal[
     "sast-semgrep",
     "sast-trufflehog",
     "sast-codeql",
+    "sast-gitleaks",
 ]
 
 # Union of all profiles used by controller worker
@@ -53,18 +75,29 @@ AllProfileLiteral = Literal[
     "network-portscan",
     "fast-portscan",
     "content-discovery",
+    "deep-content-discovery",
+    "web-crawl",
     "vuln-assessment",
     "xss-scan",
     "dast-zap",
+    "oob-interaction",
+    "dns-recon",
+    "subdomain-takeover",
+    "smart-portscan",
+    "waf-detect",
+    "cors-audit",
+    "crlf-scan",
+    "ssti-scan",
     "sast-joern",
     "sast-semgrep",
     "sast-trufflehog",
     "sast-codeql",
+    "sast-gitleaks",
 ]
 
 
 class TargetCreate(BaseModel):
-    value: str = Field(min_length=1, max_length=253, examples=["example.com", "codefy/apps"])
+    value: str = Field(min_length=1, max_length=253, examples=["example.com", "my-org/backend-service"])
     owner_reference: str = Field(min_length=3, max_length=200)
     authorization_reference: str = Field(min_length=3, max_length=200)
     target_type: Literal["network", "source_code"] = Field(

@@ -560,7 +560,20 @@ class NucleiAnalyzer:
                 cve_ids.append(template_id.upper())
 
             evidence: Any = f"Matched at: {matched_at}"
-            if extracted:
+            interaction = record.get("interaction") if isinstance(record.get("interaction"), dict) else None
+            if interaction:
+                proto = str(interaction.get("protocol", "oob")).upper()
+                remote_ip = interaction.get("remote-address", "")
+                evidence = {
+                    "matched_at": matched_at,
+                    "oob_interaction": {
+                        "protocol": proto,
+                        "remote_address": remote_ip,
+                        "query_type": interaction.get("q-type"),
+                        "unique_id": interaction.get("unique-id"),
+                    },
+                }
+            elif extracted:
                 if isinstance(extracted, list):
                     evidence = {"matched_at": matched_at, "extracted": extracted[:10]}
                 else:
@@ -896,3 +909,647 @@ class ZAPAnalyzer:
         }
 
 
+class InteractshAnalyzer:
+    """Normalizes ProjectDiscovery Interactsh Out-of-Band (OOB) interaction logs into standard findings.
+
+    Input record schema (one JSON or JSONL object from interactsh-client):
+        {
+            "protocol": "dns" | "http" | "https" | "smtp" | "ldap",
+            "unique-id": "c123456",
+            "full-id": "c123456.oast.fun",
+            "q-type": "A",
+            "raw-request": "...",
+            "raw-response": "...",
+            "remote-address": "203.0.113.42:53",
+            "timestamp": "2026-09-08T00:15:30Z"
+        }
+    """
+
+    def _sanitize_log_data(self, raw_str: str) -> str:
+        """Sanitize sensitive authorization tokens or secrets from raw request/response logs."""
+        cleaned = re.sub(r"(?i)(authorization:\s*(?:bearer|basic)\s+)[^\r\n]+", r"\1<REDACTED>", raw_str)
+        cleaned = re.sub(r"(?i)(cookie:\s*)[^\r\n]+", r"\1<REDACTED>", cleaned)
+        cleaned = re.sub(r"(?i)(api[_-]?key|token|password|secret)=([^&\s]+)", r"\1=<REDACTED>", cleaned)
+        return cleaned
+
+    def analyze(self, records: list[dict[str, Any]]) -> dict[str, Any]:
+        findings: list[dict[str, Any]] = []
+        finding_id_counter = 1
+        interaction_types: set[str] = set()
+        callback_hosts: set[str] = set()
+
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+
+            proto = str(record.get("protocol", "oob")).lower().strip()
+            unique_id = str(record.get("unique-id", "unknown"))
+            full_id = str(record.get("full-id", unique_id))
+            remote_addr = str(record.get("remote-address", "unknown"))
+            q_type = record.get("q-type")
+            timestamp = str(record.get("timestamp", ""))
+            raw_req = record.get("raw-request", "")
+            safe_raw = self._sanitize_log_data(str(raw_req))
+
+            interaction_types.add(proto.upper())
+            callback_hosts.add(remote_addr.split(":")[0])
+
+            if proto == "ldap":
+                severity = "CRITICAL"
+                score = 9.8
+                code = "INTERACTSH_OOB_LDAP_JNDI"
+                title = "Out-of-Band LDAP / JNDI Callback Detected (Potential Blind RCE)"
+                description = (
+                    f"An Out-of-Band (OOB) LDAP connection was initiated by remote host {remote_addr} "
+                    f"to the correlation identifier '{full_id}'. This indicates a high-probability Remote Code "
+                    "Execution (RCE) or JNDI injection vulnerability (such as Log4Shell or Spring4Shell)."
+                )
+                remediation = (
+                    "Audit input parameters and backend frameworks for JNDI/LDAP lookups. Upgrade vulnerable libraries "
+                    "(e.g., Log4j, Spring Framework, Fastjson) and restrict egress LDAP network traffic from servers."
+                )
+            elif proto in ("http", "https"):
+                severity = "HIGH"
+                score = 8.6
+                code = "INTERACTSH_OOB_HTTP_SSRF"
+                title = f"Out-of-Band {proto.upper()} Interaction Detected (Blind SSRF)"
+                description = (
+                    f"An Out-of-Band (OOB) {proto.upper()} request was initiated by remote host {remote_addr} "
+                    f"to the correlation target '{full_id}'. This confirms a Server-Side Request Forgery (SSRF) "
+                    "or blind external URL fetch vulnerability."
+                )
+                remediation = (
+                    "Enforce strict destination hostname allowlists for outbound HTTP requests, disable unused URL schemes "
+                    "(file://, gopher://, dict://), and implement network egress filtering to prevent internal servers from "
+                    "calling arbitrary external internet endpoints."
+                )
+            elif proto == "smtp":
+                severity = "HIGH"
+                score = 8.0
+                code = "INTERACTSH_OOB_SMTP_INJECTION"
+                title = "Out-of-Band SMTP Interaction Detected (Email Header Injection / SSRF)"
+                description = (
+                    f"An Out-of-Band (OOB) SMTP connection was initiated by remote host {remote_addr} "
+                    f"to the correlation listener '{full_id}'. This demonstrates an email header injection, "
+                    "CRLF injection, or an SSRF reaching external mail services."
+                )
+                remediation = (
+                    "Sanitize and validate all user input included in email headers, subject lines, or recipient lists. "
+                    "Restrict outbound SMTP ports (25, 465, 587) from application servers."
+                )
+            elif proto == "dns":
+                severity = "MEDIUM"
+                score = 6.5
+                code = "INTERACTSH_OOB_DNS_LOOKUP"
+                query_info = f" (Query: {q_type})" if q_type else ""
+                title = f"Out-of-Band DNS Interaction Detected (Blind Injection / DNS Exfiltration){query_info}"
+                description = (
+                    f"An Out-of-Band (OOB) DNS lookup was triggered by remote host {remote_addr} "
+                    f"for correlation domain '{full_id}'. This confirms that user input reached a network "
+                    "or name-resolution sink (such as blind SQL injection, OS command injection, or blind XXE)."
+                )
+                remediation = (
+                    "Identify the parameter or header that triggered the external DNS query. Apply strict input validation "
+                    "and type checking, and restrict internal DNS resolvers from resolving arbitrary external domains."
+                )
+            else:
+                severity = "INFO"
+                score = 3.5
+                code = f"INTERACTSH_OOB_{proto.upper()}"
+                title = f"Out-of-Band {proto.upper()} Callback Detected"
+                description = f"An Out-of-Band interaction was detected via protocol {proto.upper()} from {remote_addr}."
+                remediation = "Review application egress logs and input validation routines."
+
+            evidence = {
+                "protocol": proto.upper(),
+                "remote_address": remote_addr,
+                "correlation_id": unique_id,
+                "full_correlation_domain": full_id,
+                "query_type": q_type,
+                "timestamp": timestamp,
+                "raw_request_snippet": safe_raw[:300] if safe_raw else None,
+            }
+
+            safe_record = dict(record)
+            if "raw-request" in safe_record:
+                safe_record["raw-request"] = safe_raw
+            if "raw-response" in safe_record:
+                safe_record["raw-response"] = self._sanitize_log_data(str(safe_record["raw-response"]))
+
+            findings.append(
+                {
+                    "id": f"SEC-{finding_id_counter:03d}",
+                    "code": code,
+                    "logs": json.dumps(safe_record, indent=2),
+                    "severity": severity,
+                    "score": score,
+                    "title": title,
+                    "description": description,
+                    "evidence": evidence,
+                    "remediation": remediation,
+                }
+            )
+            finding_id_counter += 1
+
+        risk_summary = {
+            "critical": sum(1 for f in findings if f["severity"] == "CRITICAL"),
+            "high": sum(1 for f in findings if f["severity"] == "HIGH"),
+            "medium": sum(1 for f in findings if f["severity"] == "MEDIUM"),
+            "low": sum(1 for f in findings if f["severity"] == "LOW"),
+            "info": sum(1 for f in findings if f["severity"] == "INFO"),
+            "total": len(findings),
+        }
+
+        return {
+            "risk_summary": risk_summary,
+            "findings": findings,
+            "interaction_types": sorted(list(interaction_types)),
+            "callback_hosts": sorted(list(callback_hosts)),
+            "total_interactions_count": len(findings),
+        }
+
+
+
+
+# ===========================================================================
+# NEW TOOL ANALYZERS (Phase 2 & 3 Additions)
+# ===========================================================================
+
+
+class KatanaAnalyzer:
+    """Analyzer for ProjectDiscovery Katana web crawler output."""
+
+    SENSITIVE_PATH_PATTERNS = [
+        "/admin", "/administrator", "/.env", "/backup", "/api/", "/debug",
+        "/upload", "/config", "/secret", "/internal", "/private", "/swagger",
+        "/graphql", "/actuator", "/.git", "/phpinfo", "/wp-admin",
+    ]
+
+    def analyze(self, records: list[dict]) -> dict:
+        findings = []
+        endpoints: list[str] = []
+        counter = 1
+
+        for rec in records:
+            endpoint = rec.get("endpoint", rec.get("url", ""))
+            if not endpoint:
+                continue
+            endpoints.append(endpoint)
+
+            lower = endpoint.lower()
+            for pat in self.SENSITIVE_PATH_PATTERNS:
+                if pat in lower:
+                    findings.append({
+                        "id": f"SEC-{counter:03d}",
+                        "code": "KATANA_SENSITIVE_ENDPOINT",
+                        "severity": "MEDIUM",
+                        "score": 5.3,
+                        "title": f"Sensitive Endpoint Discovered: {pat}",
+                        "description": f"Web crawler discovered a potentially sensitive endpoint at: {endpoint}",
+                        "remediation": "Verify the endpoint is intended to be publicly accessible and apply appropriate authentication.",
+                        "evidence": {"endpoint": endpoint, "pattern_matched": pat},
+                        "cve_ids": [],
+                    })
+                    counter += 1
+                    break
+
+        risk = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0}
+        for f in findings:
+            sev = f["severity"].lower()
+            if sev in risk:
+                risk[sev] += 1
+        risk["total"] = len(findings)
+
+        return {
+            "endpoints_discovered": len(endpoints),
+            "endpoints": endpoints[:200],
+            "risk_summary": risk,
+            "findings": findings,
+        }
+
+
+class FeroxbusterAnalyzer:
+    """Analyzer for Feroxbuster recursive content discovery output."""
+
+    CRITICAL_PATHS = ["/.env", "/.git/", "/backup", "/db_backup", "/credentials"]
+    HIGH_PATHS = ["/admin", "/administrator", "/wp-admin", "/phpinfo", "/actuator", "/debug"]
+    MEDIUM_PATHS = ["/api/", "/swagger", "/graphql", "/upload", "/internal", "/private"]
+
+    def analyze(self, records: list[dict]) -> dict:
+        findings = []
+        discovered: list[str] = []
+        counter = 1
+
+        for rec in records:
+            if rec.get("type") != "response":
+                continue
+            url = rec.get("url", "")
+            status_code = rec.get("status", 0)
+            if not url or status_code in (404, 400, 500):
+                continue
+            discovered.append(url)
+            lower = url.lower()
+
+            severity, score, label = None, 0.0, ""
+            for pat in self.CRITICAL_PATHS:
+                if pat in lower:
+                    severity, score, label = "CRITICAL", 9.1, pat
+                    break
+            if not severity:
+                for pat in self.HIGH_PATHS:
+                    if pat in lower:
+                        severity, score, label = "HIGH", 7.5, pat
+                        break
+            if not severity:
+                for pat in self.MEDIUM_PATHS:
+                    if pat in lower:
+                        severity, score, label = "MEDIUM", 5.3, pat
+                        break
+
+            if severity:
+                findings.append({
+                    "id": f"SEC-{counter:03d}",
+                    "code": f"FEROX_SENSITIVE_{severity}",
+                    "severity": severity,
+                    "score": score,
+                    "title": f"Sensitive Path Discovered [{status_code}]: {label}",
+                    "description": f"Recursive content scan found accessible sensitive path at: {url}",
+                    "remediation": "Restrict access to sensitive paths via WAF rules, authentication, or removal.",
+                    "evidence": {"url": url, "status_code": status_code},
+                    "cve_ids": [],
+                })
+                counter += 1
+
+        risk = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0}
+        for f in findings:
+            sev = f["severity"].lower()
+            if sev in risk:
+                risk[sev] += 1
+        risk["total"] = len(findings)
+
+        return {"paths_discovered": len(discovered), "risk_summary": risk, "findings": findings}
+
+
+class DNSXAnalyzer:
+    """Analyzer for ProjectDiscovery DNSX DNS resolution output."""
+
+    def analyze(self, records: list[dict]) -> dict:
+        findings = []
+        resolved: list[str] = []
+        counter = 1
+
+        for rec in records:
+            host = rec.get("host", "")
+            if not host:
+                continue
+            resolved.append(host)
+
+            # Dangling CNAME check
+            cname = rec.get("cname", [])
+            if isinstance(cname, list):
+                for c in cname:
+                    if any(svc in c for svc in ["s3.amazonaws.com", "azurewebsites.net", "herokudns.com",
+                                                 "github.io", "myshopify.com", "cloudfront.net"]):
+                        findings.append({
+                            "id": f"SEC-{counter:03d}",
+                            "code": "DNSX_DANGLING_CNAME",
+                            "severity": "HIGH",
+                            "score": 7.5,
+                            "title": f"Potentially Dangling CNAME: {c}",
+                            "description": f"Host '{host}' has a CNAME pointing to '{c}' which may be claimable.",
+                            "remediation": "Verify the CNAME target is still provisioned and owned. Remove or update dangling records.",
+                            "evidence": {"host": host, "cname": c},
+                            "cve_ids": [],
+                        })
+                        counter += 1
+
+            # Missing SPF/DMARC for MX-bearing domains
+            mx = rec.get("mx", [])
+            txt = rec.get("txt", [])
+            if mx and isinstance(txt, list):
+                has_spf = any("v=spf1" in t for t in txt)
+                if not has_spf:
+                    findings.append({
+                        "id": f"SEC-{counter:03d}",
+                        "code": "DNSX_MISSING_SPF",
+                        "severity": "MEDIUM",
+                        "score": 5.3,
+                        "title": f"Missing SPF Record for Mail Domain: {host}",
+                        "description": "Domain has MX records but no SPF TXT record, enabling email spoofing.",
+                        "remediation": "Add an SPF TXT record: 'v=spf1 include:yourprovider.com ~all'.",
+                        "evidence": {"host": host, "mx": mx},
+                        "cve_ids": [],
+                    })
+                    counter += 1
+
+        risk = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0}
+        for f in findings:
+            sev = f["severity"].lower()
+            if sev in risk:
+                risk[sev] += 1
+        risk["total"] = len(findings)
+
+        return {
+            "hosts_resolved": len(resolved),
+            "risk_summary": risk,
+            "findings": findings,
+        }
+
+
+class SubdomainTakeoverAnalyzer:
+    """Analyzer for Subzy subdomain takeover detection output."""
+
+    CONFIRMED_SEVERITY = "CRITICAL"
+    VULNERABLE_SEVERITY = "HIGH"
+
+    def analyze(self, records: list[dict]) -> dict:
+        findings = []
+        counter = 1
+
+        for rec in records:
+            subdomain = rec.get("subdomain", rec.get("host", ""))
+            result = str(rec.get("result", "")).upper()
+            service = rec.get("service", "unknown")
+
+            if result in ("VULNERABLE", "VULNERABLE!", "TAKEABLE"):
+                findings.append({
+                    "id": f"SEC-{counter:03d}",
+                    "code": "SUBDOMAIN_TAKEOVER_VULNERABLE",
+                    "severity": self.CONFIRMED_SEVERITY,
+                    "score": 9.3,
+                    "title": f"Subdomain Takeover Vulnerability: {subdomain}",
+                    "description": f"'{subdomain}' has a dangling DNS record pointing to an unclaimed '{service}' resource. An attacker can claim it.",
+                    "remediation": "Remove the dangling DNS CNAME record or re-provision the missing service resource immediately.",
+                    "evidence": {"subdomain": subdomain, "service": service, "result": result},
+                    "cve_ids": [],
+                })
+                counter += 1
+
+        risk = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0}
+        for f in findings:
+            sev = f["severity"].lower()
+            if sev in risk:
+                risk[sev] += 1
+        risk["total"] = len(findings)
+
+        return {"subdomains_checked": len(records), "risk_summary": risk, "findings": findings}
+
+
+class NaabuAnalyzer:
+    """Analyzer for ProjectDiscovery Naabu fast port scanner output."""
+
+    # Reuse the risky ports classification from PortScanAnalyzer
+    RISKY_PORTS: dict[int, tuple[str, str, float]] = {
+        21: ("FTP", "HIGH", 7.5), 22: ("SSH", "INFO", 0.0), 23: ("Telnet", "CRITICAL", 9.8),
+        25: ("SMTP", "MEDIUM", 5.3), 110: ("POP3", "MEDIUM", 5.3), 143: ("IMAP", "MEDIUM", 5.3),
+        445: ("SMB", "HIGH", 8.8), 3389: ("RDP", "HIGH", 8.1), 1433: ("MSSQL", "HIGH", 7.5),
+        3306: ("MySQL", "HIGH", 7.5), 5432: ("PostgreSQL", "HIGH", 7.5),
+        27017: ("MongoDB", "CRITICAL", 9.8), 6379: ("Redis", "HIGH", 8.1),
+        9200: ("Elasticsearch", "CRITICAL", 9.8), 11211: ("Memcached", "HIGH", 7.5),
+        2375: ("Docker API", "CRITICAL", 9.8), 8500: ("Consul", "HIGH", 8.1),
+    }
+
+    def analyze(self, records: list[dict]) -> dict:
+        findings = []
+        open_ports: list[dict] = []
+        counter = 1
+
+        for rec in records:
+            host = rec.get("host", rec.get("ip", ""))
+            port = rec.get("port", 0)
+            if not host or not port:
+                continue
+
+            open_ports.append({"host": host, "port": port})
+
+            if port in self.RISKY_PORTS:
+                svc, sev, score = self.RISKY_PORTS[port]
+                if sev == "INFO":
+                    continue
+                findings.append({
+                    "id": f"SEC-{counter:03d}",
+                    "code": f"NAABU_RISKY_PORT_{port}",
+                    "severity": sev,
+                    "score": score,
+                    "title": f"Risky Open Port {port} ({svc}) on {host}",
+                    "description": f"Port {port} ({svc}) is open and accessible on {host}.",
+                    "remediation": "Restrict access to this port via firewall rules. Only allow from trusted IP ranges.",
+                    "evidence": {"host": host, "port": port, "service": svc},
+                    "cve_ids": [],
+                })
+                counter += 1
+
+        risk = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0}
+        for f in findings:
+            sev = f["severity"].lower()
+            if sev in risk:
+                risk[sev] += 1
+        risk["total"] = len(findings)
+
+        return {"open_ports_count": len(open_ports), "open_ports": open_ports[:100], "risk_summary": risk, "findings": findings}
+
+
+class WAFDetectionAnalyzer:
+    """Analyzer for WafW00f WAF fingerprinting output."""
+
+    def analyze(self, records: list[dict]) -> dict:
+        findings = []
+        waf_results: list[dict] = []
+        counter = 1
+
+        for rec in records:
+            url = rec.get("url", "")
+            waf = rec.get("detected", [])
+            if isinstance(waf, list):
+                for detected in waf:
+                    name = detected.get("firewall", "Unknown WAF")
+                    manufacturer = detected.get("manufacturer", "")
+                    waf_results.append({"url": url, "waf": name, "manufacturer": manufacturer})
+                    findings.append({
+                        "id": f"SEC-{counter:03d}",
+                        "code": "WAF_DETECTED",
+                        "severity": "INFO",
+                        "score": 0.0,
+                        "title": f"WAF Detected: {name} ({manufacturer})",
+                        "description": f"Web Application Firewall '{name}' by '{manufacturer}' detected on {url}.",
+                        "remediation": "Ensure WAF rules are current and tuned. Test bypass techniques regularly.",
+                        "evidence": {"url": url, "waf": name, "manufacturer": manufacturer},
+                        "cve_ids": [],
+                    })
+                    counter += 1
+
+        risk = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": len(findings), "total": len(findings)}
+        return {"waf_results": waf_results, "risk_summary": risk, "findings": findings}
+
+
+class CORSAnalyzer:
+    """Analyzer for Corsy CORS misconfiguration scanner output."""
+
+    SEVERITY_MAP = {
+        "Wildcard Origin Allowed": ("HIGH", 7.5),
+        "Null Origin Allowed": ("HIGH", 8.1),
+        "Origin Reflected": ("MEDIUM", 5.3),
+        "Wildcard HTTPS Origin Allowed": ("MEDIUM", 5.3),
+        "Third Party Allowed": ("MEDIUM", 5.3),
+    }
+
+    def analyze(self, records: list[dict]) -> dict:
+        findings = []
+        counter = 1
+
+        for rec in records:
+            url = rec.get("url", "")
+            cors_type = rec.get("class", rec.get("type", "CORS Misconfiguration"))
+            credentials = rec.get("credentials", False)
+
+            sev, score = self.SEVERITY_MAP.get(cors_type, ("MEDIUM", 5.3))
+            # Escalate to CRITICAL if credentials are included
+            if credentials and sev in ("HIGH", "MEDIUM"):
+                sev, score = "CRITICAL", 9.3
+
+            findings.append({
+                "id": f"SEC-{counter:03d}",
+                "code": f"CORS_{cors_type.upper().replace(' ', '_')}",
+                "severity": sev,
+                "score": score,
+                "title": f"CORS Misconfiguration: {cors_type}",
+                "description": f"CORS misconfiguration ({cors_type}) detected at {url}. Credentials included: {credentials}.",
+                "remediation": "Restrict CORS policy to specific trusted origins. Never use wildcard (*) with Allow-Credentials: true.",
+                "evidence": {"url": url, "type": cors_type, "credentials": credentials},
+                "cve_ids": [],
+            })
+            counter += 1
+
+        risk = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0}
+        for f in findings:
+            sev = f["severity"].lower()
+            if sev in risk:
+                risk[sev] += 1
+        risk["total"] = len(findings)
+
+        return {"risk_summary": risk, "findings": findings}
+
+
+class CRLFAnalyzer:
+    """Analyzer for CRLFuzz CRLF injection scanner output."""
+
+    def analyze(self, records: list[dict]) -> dict:
+        findings = []
+        counter = 1
+
+        for rec in records:
+            url = rec.get("url", str(rec) if isinstance(rec, str) else "")
+            payload = rec.get("payload", "") if isinstance(rec, dict) else ""
+            findings.append({
+                "id": f"SEC-{counter:03d}",
+                "code": "CRLF_INJECTION",
+                "severity": "MEDIUM",
+                "score": 6.1,
+                "title": f"CRLF Injection Vulnerability: {url}",
+                "description": "CRLF sequence injection confirmed. Attacker can inject arbitrary HTTP response headers, leading to cache poisoning, XSS, or session fixation.",
+                "remediation": r"Sanitize all user-controlled inputs before reflecting them in HTTP response headers. Encode newline characters (\r\n).",
+                "evidence": {"url": url, "payload": payload},
+                "cve_ids": [],
+            })
+            counter += 1
+
+        risk = {"critical": 0, "high": 0, "medium": len(findings), "low": 0, "info": 0, "total": len(findings)}
+        return {"risk_summary": risk, "findings": findings}
+
+
+class SSTIAnalyzer:
+    """Analyzer for SSTImap Server-Side Template Injection scanner output."""
+
+    ENGINE_SEVERITY: dict[str, tuple[str, float]] = {
+        "jinja2": ("CRITICAL", 9.8),
+        "twig": ("CRITICAL", 9.8),
+        "freemarker": ("CRITICAL", 9.8),
+        "smarty": ("HIGH", 8.8),
+        "pebble": ("HIGH", 8.1),
+        "velocity": ("HIGH", 8.1),
+        "mako": ("CRITICAL", 9.5),
+    }
+    DEFAULT = ("HIGH", 8.0)
+
+    def analyze(self, records: list[dict]) -> dict:
+        findings = []
+        counter = 1
+
+        for rec in records:
+            url = rec.get("url", "")
+            engine = str(rec.get("engine", "")).lower()
+            parameter = rec.get("parameter", "unknown")
+            rce_confirmed = rec.get("rce", False)
+
+            sev, score = self.ENGINE_SEVERITY.get(engine, self.DEFAULT)
+            if rce_confirmed:
+                sev, score = "CRITICAL", 10.0
+
+            findings.append({
+                "id": f"SEC-{counter:03d}",
+                "code": f"SSTI_{engine.upper() or 'UNKNOWN'}_INJECTION",
+                "severity": sev,
+                "score": score,
+                "title": f"SSTI Detected ({engine or 'Unknown Engine'}): {url}",
+                "description": f"Server-Side Template Injection in '{parameter}' parameter at {url}. Engine: {engine}. RCE confirmed: {rce_confirmed}.",
+                "remediation": "Never pass user input directly into template rendering. Use sandboxed templates or strict output encoding.",
+                "evidence": {"url": url, "engine": engine, "parameter": parameter, "rce": rce_confirmed},
+                "cve_ids": [],
+            })
+            counter += 1
+
+        risk = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0}
+        for f in findings:
+            sev = f["severity"].lower()
+            if sev in risk:
+                risk[sev] += 1
+        risk["total"] = len(findings)
+
+        return {"risk_summary": risk, "findings": findings}
+
+
+class GitleaksAnalyzer:
+    """Analyzer for Gitleaks secret scanner output."""
+
+    HIGH_RULES = {"aws", "gcp", "azure", "private-key", "rsa", "github-token", "slack", "stripe", "twilio", "sendgrid"}
+    REDACT_PATTERN = __import__('re').compile(r"(?i)(key|token|secret|password|credential|api[_-]?key)=[\w+/=]{8,}")
+
+    def analyze(self, records: list[dict]) -> dict:
+        import re
+        findings = []
+        counter = 1
+
+        for rec in records:
+            rule_id = str(rec.get("RuleID", rec.get("rule_id", "secret"))).lower()
+            file_path = rec.get("File", rec.get("file", ""))
+            line_no = rec.get("StartLine", rec.get("line", 0))
+            match_text = rec.get("Match", rec.get("match", ""))
+            commit = rec.get("Commit", rec.get("commit", ""))
+
+            # Redact actual secret from evidence
+            redacted = re.sub(self.REDACT_PATTERN, lambda m: m.group().split("=")[0] + "=<REDACTED>", match_text)
+
+            severity = "CRITICAL" if any(h in rule_id for h in self.HIGH_RULES) else "HIGH"
+            score = 9.8 if severity == "CRITICAL" else 8.5
+
+            findings.append({
+                "id": f"SEC-{counter:03d}",
+                "code": f"GITLEAKS_{rule_id.upper().replace('-', '_')}",
+                "severity": severity,
+                "score": score,
+                "title": f"Secret Leaked: {rule_id}",
+                "description": f"Hardcoded secret of type '{rule_id}' detected at {file_path}:{line_no}.",
+                "remediation": "Immediately rotate the leaked credential. Remove from git history using 'git filter-repo' or BFG Repo Cleaner. Add to .gitignore.",
+                "evidence": {"rule": rule_id, "file": file_path, "line": line_no, "match_redacted": redacted, "commit": commit},
+                "cve_ids": [],
+            })
+            counter += 1
+
+        risk = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0}
+        for f in findings:
+            sev = f["severity"].lower()
+            if sev in risk:
+                risk[sev] += 1
+        risk["total"] = len(findings)
+
+        return {"secrets_found": len(findings), "risk_summary": risk, "findings": findings}

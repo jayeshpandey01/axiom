@@ -27,14 +27,18 @@ class Settings(BaseSettings):
     max_targets_per_scan: int = 10
     log_level: str = "INFO"
     github_token: str | None = None
-    github_repo_owner: str = "jayeshpandey01"
-    github_repo_name: str = "axiom"
+    github_repo_owner: str | None = None
+    github_repo_name: str | None = None
     github_workflow_id: str = "scanner_runner.yml"
     github_ref: str = "main"
     axiom_token: str | None = None
     axiom_dataset: str = "security-scans"
     axiom_url: str | None = None
     axiom_enabled: bool = False
+    interactsh_server: str | None = None
+    interactsh_token: str | None = None
+    interactsh_disable: bool = False
+    interactsh_poll_duration_sec: int = 15
 
     def validate_production(self) -> None:
         if self.app_env.lower() != "production":
@@ -49,6 +53,10 @@ class Settings(BaseSettings):
             raise RuntimeError("production requires RESULT_STORAGE_BUCKET and RESULT_ENCRYPTION_KEY")
         if self.result_retention_days < 1:
             raise RuntimeError("RESULT_RETENTION_DAYS must be at least one day")
+        if self.database_url.startswith("sqlite"):
+            raise RuntimeError("production requires a managed PostgreSQL database")
+        if self.controller_shared_secret == "development-only-change-me":
+            raise RuntimeError("production requires a secure, non-default CONTROLLER_SHARED_SECRET")
 
 
 @lru_cache

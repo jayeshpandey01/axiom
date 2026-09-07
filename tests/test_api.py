@@ -56,7 +56,7 @@ def test_new_profiles_accepted_by_schema() -> None:
     """All new profile names must pass schema validation (we only test 422 vs non-422 here;
     the full flow is covered by test_e2e_new_profiles.py)."""
     settings = get_settings()
-    new_profiles = ["network-portscan", "fast-portscan", "content-discovery", "vuln-assessment"]
+    new_profiles = ["network-portscan", "fast-portscan", "content-discovery", "vuln-assessment", "oob-interaction"]
     with TestClient(app) as client:
         for profile in new_profiles:
             response = client.post(

@@ -17,6 +17,7 @@ from controller.agent import (
     parse_codeql_output,
     parse_dalfox_output,
     parse_ffuf_output,
+    parse_interactsh_output,
     parse_joern_output,
     parse_masscan_output,
     parse_nmap_output,
@@ -381,6 +382,54 @@ def test_zap_scan_lifecycle() -> None:
         assert "q" in result["summary"]["vulnerable_parameters"]
 
 
+def test_oob_interaction_scan_lifecycle() -> None:
+    """Full lifecycle test for oob-interaction (Interactsh OOB) profile."""
+    with TestClient(app) as client:
+        settings = get_settings()
+        _target_id, scan_id = _register_and_queue(client, "oob-interaction")
+
+        # Verify queued
+        status_res = client.get(f"/v1/scans/{scan_id}", headers={"X-API-Key": settings.api_key})
+        assert status_res.status_code == 200
+        assert status_res.json()["status"] == "queued"
+        assert status_res.json()["profile"] == "oob-interaction"
+
+        # Controller claims and completes with Interactsh-style summary
+        oob_summary = {
+            "risk_summary": {"critical": 0, "high": 1, "medium": 1, "low": 0, "info": 0, "total": 2},
+            "findings": [
+                {
+                    "id": "SEC-001",
+                    "code": "INTERACTSH_OOB_HTTP_SSRF",
+                    "title": "Out-of-Band HTTP Interaction Detected (Blind SSRF)",
+                    "severity": "HIGH",
+                    "score": 8.6,
+                },
+                {
+                    "id": "SEC-002",
+                    "code": "INTERACTSH_OOB_DNS_LOOKUP",
+                    "title": "Out-of-Band DNS Interaction Detected",
+                    "severity": "MEDIUM",
+                    "score": 6.5,
+                },
+            ],
+            "interaction_types": ["DNS", "HTTP"],
+            "callback_hosts": ["203.0.113.195"],
+            "total_interactions_count": 2,
+        }
+        _claim_and_complete(client, scan_id, oob_summary)
+
+        # Operator retrieves normalized scan result
+        result_res = client.get(f"/v1/scans/{scan_id}/result", headers={"X-API-Key": settings.api_key})
+        assert result_res.status_code == 200
+        result = result_res.json()
+        assert result["scan_job_id"] == scan_id
+        assert result["summary"]["risk_summary"]["high"] == 1
+        assert result["summary"]["risk_summary"]["medium"] == 1
+        assert "HTTP" in result["summary"]["interaction_types"]
+        assert len(result["summary"]["findings"]) == 2
+
+
 # ---------------------------------------------------------------------------
 # Parser unit tests (no server needed)
 # ---------------------------------------------------------------------------
@@ -495,6 +544,21 @@ def test_parse_zap_output_from_dry_run(tmp_path):
     assert result["risk_summary"]["high"] >= 1
     assert "q" in result["vulnerable_parameters"]
     assert len(result["tested_urls"]) >= 1
+
+
+def test_parse_interactsh_output_from_dry_run(tmp_path):
+    from controller.fleet_manager import FleetManager
+    from controller.profiles import get_profile
+
+    manager = FleetManager(dry_run=True)
+    manager.work_dir = tmp_path
+    output_file = tmp_path / "interactsh.ndjson"
+    manager._write_dry_run_output(get_profile("oob-interaction"), "example.com", output_file)
+    result = parse_interactsh_output(output_file)
+    assert result["risk_summary"]["total"] >= 2
+    assert "HTTP" in result["interaction_types"]
+    assert "DNS" in result["interaction_types"]
+    assert len(result["findings"]) >= 2
 
 
 

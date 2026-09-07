@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -56,6 +57,12 @@ def test_new_profiles_exist() -> None:
     assert zap_profile.name == "dast-zap"
     assert zap_profile.axiom_module == "zap"
     assert zap_profile.standalone_binary == "zap-baseline.py"
+
+    oob_profile = get_profile("oob-interaction")
+    assert oob_profile.name == "oob-interaction"
+    assert oob_profile.axiom_module == "interactsh"
+    assert oob_profile.standalone_binary == "interactsh-client"
+    assert "-json" in oob_profile.extra_flags
 
 
 
@@ -157,6 +164,21 @@ def test_dry_run_nuclei_scan(tmp_path: Path) -> None:
         record = json.loads(lines[0])
         assert "template-id" in record
         assert "info" in record
+
+
+def test_dry_run_oob_interaction_scan(tmp_path: Path) -> None:
+    manager = FleetManager(dry_run=True)
+    manager.work_dir = tmp_path
+    output_file = tmp_path / "oob_out.ndjson"
+
+    with manager.managed_fleet("test-oob-fleet", count=1) as fleet:
+        manager.execute_scan(fleet, "oob-interaction", "example.com", output_file)
+        assert output_file.exists()
+        lines = [line.strip() for line in output_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+        assert len(lines) >= 1
+        record = json.loads(lines[0])
+        assert "protocol" in record
+        assert "unique-id" in record
 
 
 def test_vulnerability_analyzer_classifies_findings() -> None:

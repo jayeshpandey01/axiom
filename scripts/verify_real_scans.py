@@ -115,7 +115,7 @@ def verify_dast_real_scan(client: httpx.Client, agent: ControllerAgent) -> dict:
     return result
 
 
-def verify_sast_real_scan(client: httpx.Client, agent: ControllerAgent) -> dict:
+def verify_sast_real_scan(client: httpx.Client, agent: ControllerAgent, profile: str = "sast-semgrep") -> dict:
     print("\n" + "=" * 75)
     print(f" [PHASE 2] REAL SAST SCAN: Source Codebase '{TARGET_SAST}'")
     print("=" * 75)
@@ -147,11 +147,11 @@ def verify_sast_real_scan(client: httpx.Client, agent: ControllerAgent) -> dict:
     scan_resp = client.post(
         "/v1/sast/scans",
         headers=operator_headers,
-        json={"target_id": target_id, "profile": "sast-semgrep"},
+        json={"target_id": target_id, "profile": profile},
     )
     assert scan_resp.status_code == 202, f"Failed to queue SAST scan: {scan_resp.text}"
     scan_id = scan_resp.json()["id"]
-    print(f"[+] SAST Scan Job Queued: ID={scan_id}, Profile='sast-semgrep'")
+    print(f"[+] SAST Scan Job Queued: ID={scan_id}, Profile='{profile}'")
 
     # 3. Process via Controller Agent
     print("[+] Controller Agent claiming queued SAST job...")
@@ -260,9 +260,17 @@ def main():
         # Initialize Controller Agent bound to the test ASGI client
         agent = ControllerAgent(api_base_url="http://testserver", http_client=client)
 
+        # Drain any leftover queued jobs from previous runs
+        while True:
+            leftover = agent.claim_job()
+            if not leftover:
+                break
+            agent.fail_job(leftover["id"], "Cancelled leftover queued test job")
+
         # Execute all 3 phases
         dast_results = verify_dast_real_scan(client, agent)
-        sast_results = verify_sast_real_scan(client, agent)
+        sast_results = verify_sast_real_scan(client, agent, profile="sast-semgrep")
+        codeql_results = verify_sast_real_scan(client, agent, profile="sast-codeql")
         verify_security_boundaries(client)
 
     print("\n" + "=" * 75)
@@ -271,8 +279,8 @@ def main():
     print(f"   - Identified Server: {dast_results['summary'].get('web_servers', ['Unknown'])}")
     print(f"   - Identified Flaws:  {len(dast_results['summary'].get('findings', []))} vulnerabilities")
     print(f" SAST Target: {TARGET_SAST}")
-    print(f"   - Scanned Files:     {sast_results['summary'].get('scanned_files_count', 0)}")
-    print(f"   - Identified Flaws:  {len(sast_results['summary'].get('findings', []))} security findings")
+    print(f"   - Semgrep Findings:  {len(sast_results['summary'].get('findings', []))} security findings")
+    print(f"   - CodeQL Findings:   {len(codeql_results['summary'].get('findings', []))} security findings")
     print(" Security Guardrails:  100% Passing (Scope, Auth, RBAC, Sanitization)")
     print("=" * 75)
     print("[SUCCESS] ALL VERIFICATIONS PASSED WITH 10/10 QUALITY & ZERO DATA LEAKAGE!")

@@ -444,6 +444,32 @@ class FleetManager:
             }
             output_file_path.write_text(json.dumps(zap_report, indent=2) + "\n", encoding="utf-8")
 
+        elif profile.name == "oob-interaction":
+            target_slug = re.sub(r"[^a-zA-Z0-9]", "", target_value)[:8] or "target"
+            interactions = [
+                {
+                    "protocol": "http",
+                    "unique-id": f"c{target_slug}01",
+                    "full-id": f"c{target_slug}01.oast.fun",
+                    "raw-request": f"GET /callback?user=admin HTTP/1.1\r\nHost: c{target_slug}01.oast.fun\r\nUser-Agent: Axiom-Prober\r\n\r\n",
+                    "raw-response": "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok",
+                    "remote-address": "203.0.113.195:44321",
+                    "timestamp": "2026-09-08T00:15:30Z",
+                },
+                {
+                    "protocol": "dns",
+                    "unique-id": f"c{target_slug}02",
+                    "full-id": f"c{target_slug}02.oast.fun",
+                    "q-type": "A",
+                    "raw-request": f"Query: c{target_slug}02.oast.fun IN A",
+                    "raw-response": "Answer: 127.0.0.1",
+                    "remote-address": "198.51.100.22:53",
+                    "timestamp": "2026-09-08T00:15:32Z",
+                },
+            ]
+            ndjson = "\n".join(json.dumps(r) for r in interactions) + "\n"
+            output_file_path.write_text(ndjson, encoding="utf-8")
+
         elif profile.name == "sast-joern":
             # Joern structured SAST findings output format
             findings = [
@@ -746,22 +772,98 @@ class FleetManager:
             }
             output_file_path.write_text(json.dumps(sarif_data, indent=2) + "\n", encoding="utf-8")
 
+        elif profile.name == "web-crawl":
+            endpoints = [
+                {"endpoint": f"https://{target_value}/", "source": "head"},
+                {"endpoint": f"https://{target_value}/api/v1/users", "source": "body"},
+                {"endpoint": f"https://{target_value}/admin/login", "source": "form"},
+                {"endpoint": f"https://{target_value}/static/app.js", "source": "script"},
+            ]
+            output_file_path.write_text("\n".join(json.dumps(e) for e in endpoints) + "\n", encoding="utf-8")
+
+        elif profile.name == "deep-content-discovery":
+            results = [
+                {"type": "response", "url": f"https://{target_value}/", "status": 200, "content_length": 1024},
+                {"type": "response", "url": f"https://{target_value}/api", "status": 200, "content_length": 512},
+                {"type": "response", "url": f"https://{target_value}/admin", "status": 200, "content_length": 2048},
+            ]
+            output_file_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+
+        elif profile.name == "dns-recon":
+            records = [
+                {"host": target_value, "a": ["93.184.216.34"], "cname": [], "mx": [f"mail.{target_value}"], "txt": ["v=spf1 ~all"]},
+                {"host": f"api.{target_value}", "a": ["93.184.216.35"], "cname": [], "mx": [], "txt": []},
+            ]
+            output_file_path.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
+
+        elif profile.name == "subdomain-takeover":
+            results = [
+                {"subdomain": f"docs.{target_value}", "result": "NOT VULNERABLE", "service": "GitHub Pages"},
+                {"subdomain": f"blog.{target_value}", "result": "NOT VULNERABLE", "service": "Medium"},
+            ]
+            output_file_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+
+        elif profile.name == "smart-portscan":
+            ports = [
+                {"host": target_value, "ip": "93.184.216.34", "port": 80},
+                {"host": target_value, "ip": "93.184.216.34", "port": 443},
+            ]
+            output_file_path.write_text("\n".join(json.dumps(p) for p in ports) + "\n", encoding="utf-8")
+
+        elif profile.name == "waf-detect":
+            results = [
+                {"url": f"https://{target_value}", "detected": [{"firewall": "Generic WAF", "manufacturer": "Security Corp"}]}
+            ]
+            output_file_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+
+        elif profile.name == "cors-audit":
+            results = [
+                {"url": f"https://{target_value}/api", "class": "Origin Reflected", "credentials": False}
+            ]
+            output_file_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+
+        elif profile.name == "crlf-scan":
+            records = [
+                {"url": f"https://{target_value}/", "payload": "%0d%0a"}
+            ]
+            output_file_path.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
+
+        elif profile.name == "ssti-scan":
+            results = [
+                {"url": f"https://{target_value}/search", "engine": "jinja2", "parameter": "q", "rce": False}
+            ]
+            output_file_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+
+        elif profile.name == "sast-gitleaks":
+            secrets = [
+                {
+                    "RuleID": "generic-api-key",
+                    "File": "config/settings.py",
+                    "StartLine": 12,
+                    "Match": "api_key=supersecretvalue123456",
+                    "Commit": "0000000",
+                }
+            ]
+            output_file_path.write_text(json.dumps(secrets, indent=2) + "\n", encoding="utf-8")
+
     # ------------------------------------------------------------------
     def _resolve_source_path(self, target_value: str) -> Path | None:
-        """Resolve target directory or repository path on disk."""
+        """Resolve target directory or repository path on disk dynamically without hardcoded paths."""
+        t_path = Path(target_value)
         candidates = [
-            Path(target_value),
-            Path.cwd() / target_value,
-            Path.cwd().parent / target_value,
-            Path.home() / "Documents" / target_value,
-            Path.home() / target_value,
+            t_path,
+            Path.cwd() / t_path,
+            Path.cwd().parent / t_path,
+            Path.home() / "Documents" / t_path,
+            Path.home() / t_path,
         ]
-        if "codefy" in target_value:
-            candidates.extend([
-                Path.home() / "Documents" / "codefy" / "apps",
-                Path.cwd().parent / "codefy" / "apps",
-                Path.cwd() / "codefy" / "apps",
-            ])
+        # Also check subdirectories of common development roots
+        for root in (Path.cwd(), Path.cwd().parent, Path.home() / "Documents"):
+            if root.is_dir():
+                candidate = root / t_path
+                if candidate not in candidates:
+                    candidates.append(candidate)
+
         for c in candidates:
             try:
                 if c.exists():
@@ -1050,6 +1152,19 @@ class FleetManager:
             }
             output_file_path.write_text(json.dumps(sarif_obj, indent=2), encoding="utf-8")
 
+        elif profile.name == "sast-gitleaks":
+            gitleaks_findings = []
+            for f in findings_raw:
+                if f["type"] == "secret":
+                    gitleaks_findings.append({
+                        "RuleID": f.get("detector", "generic-secret").lower().replace(" ", "-"),
+                        "File": f["file"],
+                        "StartLine": f["line"],
+                        "Match": f.get("raw_secret", ""),
+                        "Commit": "workspace",
+                    })
+            output_file_path.write_text(json.dumps(gitleaks_findings, indent=2), encoding="utf-8")
+
         else:  # sast-joern
             joern_findings = []
             for f in findings_raw:
@@ -1103,11 +1218,20 @@ class FleetManager:
             except FileNotFoundError:
                 use_axiom = False
 
-        # Determine if this is a live target scanning run (portfoliojayesh, codefy, or non-dry-run)
+        # Determine dynamically if this is a live target scanning run:
+        # 1. Non-dry-run mode is always live.
+        # 2. For SAST: Any resolved existing local path/directory is a live scan target.
+        # 3. For DAST: Any domain that is not a mock unit-test fixture domain is a live target.
+        resolved_sast_path = self._resolve_source_path(target_value) if profile.name.startswith("sast-") else None
+        mock_domains = ("example.com", "example.org", "testserver", "scanme.nmap.org", ".test")
+        is_mock_test_domain = (
+            any(target_value.lower().endswith(dom) or f".{dom}" in target_value.lower() for dom in mock_domains)
+            or target_value.startswith(("probe-", "mock-", "test-"))
+        )
         is_live_target = (
-            "portfoliojayesh" in target_value.lower()
-            or "codefy" in target_value.lower()
-            or (self._resolve_source_path(target_value) is not None and profile.name.startswith("sast-"))
+            not self.dry_run
+            or resolved_sast_path is not None
+            or not is_mock_test_domain
         )
 
         try:
@@ -1132,7 +1256,7 @@ class FleetManager:
                 return self._run_native_dast_probe(target_value, output_file_path)
 
             # 2. SAST Source Code Analysis
-            elif profile.name in ("sast-semgrep", "sast-joern", "sast-trufflehog", "sast-codeql"):
+            elif profile.name.startswith("sast-"):
                 try:
                     scanner_bin = self._resolve_scanner_binary_for_profile(profile)
                     if not scanner_bin.startswith("mock-"):
@@ -1236,13 +1360,21 @@ class FleetManager:
 
         elif profile.name == "vuln-assessment":
             scanner_bin = self._resolve_scanner_binary_for_profile(profile)
-            return [
+            cmd = [
                 scanner_bin,
                 "-l",
                 str(target_file),
                 "-jle",
                 str(output_file_path),
-            ] + profile.extra_flags
+            ]
+            if settings.interactsh_disable:
+                cmd.append("-no-interactsh")
+            else:
+                if settings.interactsh_server:
+                    cmd += ["-interactsh-server", settings.interactsh_server]
+                if settings.interactsh_token:
+                    cmd += ["-interactsh-token", settings.interactsh_token]
+            return cmd + profile.extra_flags
 
         elif profile.name == "xss-scan":
             scanner_bin = self._resolve_scanner_binary_for_profile(profile)
@@ -1264,6 +1396,22 @@ class FleetManager:
                 "-J",
                 str(output_file_path),
             ] + profile.extra_flags
+
+        elif profile.name == "oob-interaction":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            cmd = [
+                scanner_bin,
+                "-json",
+                "-o",
+                str(output_file_path),
+                "-duration",
+                str(settings.interactsh_poll_duration_sec),
+            ]
+            if settings.interactsh_server:
+                cmd += ["-server", settings.interactsh_server]
+            if settings.interactsh_token:
+                cmd += ["-token", settings.interactsh_token]
+            return cmd + profile.extra_flags
 
         elif profile.name == "sast-joern":
             scanner_bin = self._resolve_scanner_binary_for_profile(profile)
@@ -1321,6 +1469,79 @@ class FleetManager:
                 "--format=sarif-latest",
                 f"--output={output_file_path}",
                 "--threads=0",
+            ] + profile.extra_flags
+
+        elif profile.name == "web-crawl":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            target_url = target_value if target_value.startswith("http") else f"https://{target_value}"
+            return [scanner_bin, "-u", target_url, "-json", "-o", str(output_file_path)] + profile.extra_flags
+
+        elif profile.name == "deep-content-discovery":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            target_url = target_value if target_value.startswith("http") else f"https://{target_value}"
+            return [
+                scanner_bin, "--url", target_url, "--output", str(output_file_path),
+                "--json", "--silent", "--no-state",
+            ] + profile.extra_flags
+
+        elif profile.name == "dns-recon":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            return [
+                scanner_bin, "-d", target_value,
+                "-json", "-o", str(output_file_path),
+                "-a", "-aaaa", "-cname", "-mx", "-txt",
+            ] + profile.extra_flags
+
+        elif profile.name == "subdomain-takeover":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            return [
+                scanner_bin, "run", "--targets", target_value,
+                "--json", "--output", str(output_file_path),
+            ] + profile.extra_flags
+
+        elif profile.name == "smart-portscan":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            return [
+                scanner_bin, "-host", target_value,
+                "-json", "-o", str(output_file_path),
+                "-top-ports", "1000", "-silent",
+            ] + profile.extra_flags
+
+        elif profile.name == "waf-detect":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            target_url = target_value if target_value.startswith("http") else f"https://{target_value}"
+            return [
+                scanner_bin, target_url,
+                "-a", "-f", "json", "-o", str(output_file_path),
+            ] + profile.extra_flags
+
+        elif profile.name == "cors-audit":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            target_url = target_value if target_value.startswith("http") else f"https://{target_value}"
+            return [
+                scanner_bin, "-u", target_url, "-o", str(output_file_path),
+            ] + profile.extra_flags
+
+        elif profile.name == "crlf-scan":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            target_url = target_value if target_value.startswith("http") else f"https://{target_value}"
+            return [
+                scanner_bin, "-u", target_url, "-o", str(output_file_path), "-s",
+            ] + profile.extra_flags
+
+        elif profile.name == "ssti-scan":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            target_url = target_value if target_value.startswith("http") else f"https://{target_value}"
+            return [
+                scanner_bin, "-u", target_url, "--json", "-o", str(output_file_path),
+            ] + profile.extra_flags
+
+        elif profile.name == "sast-gitleaks":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            return [
+                scanner_bin, "dir", "--path", target_value,
+                "--report-format", "json", "--report-path", str(output_file_path),
+                "--no-git",
             ] + profile.extra_flags
 
         else:

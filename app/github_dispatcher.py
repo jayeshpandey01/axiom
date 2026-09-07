@@ -100,8 +100,8 @@ def trigger_cloud_scanner_if_needed() -> bool:
     """
     settings = get_settings()
 
-    if not settings.github_token:
-        logger.debug("GITHUB_TOKEN not configured. Skipping automated GitHub cloud runner dispatch.")
+    if not settings.github_token or not settings.github_repo_owner or not settings.github_repo_name:
+        logger.debug("GITHUB_TOKEN or repository coordinates not configured. Skipping automated GitHub cloud runner dispatch.")
         return False
 
     try:

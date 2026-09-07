@@ -14,7 +14,7 @@ def test_missing_controller_headers_rejected() -> None:
     with TestClient(app) as client:
         response = client.post("/v1/internal/controller/jobs/claim")
     assert response.status_code == 401
-    assert "missing controller authentication headers" in response.json()["detail"]
+    assert "missing controller authentication headers" in response.json()["error"]["detail"]
 
 
 def test_valid_hmac_signature_passes() -> None:
@@ -33,7 +33,7 @@ def test_tampered_payload_rejected() -> None:
         # Send modified body that doesn't match signed body hash
         response = client.post(path, headers=headers, content=b'{"tampered": true}')
     assert response.status_code == 401
-    assert "invalid controller signature" in response.json()["detail"]
+    assert "invalid controller signature" in response.json()["error"]["detail"]
 
 
 def test_expired_timestamp_rejected() -> None:
@@ -52,7 +52,7 @@ def test_expired_timestamp_rejected() -> None:
     with TestClient(app) as client:
         response = client.post(path, headers=headers)
     assert response.status_code == 401
-    assert "expired controller request" in response.json()["detail"]
+    assert "expired controller request" in response.json()["error"]["detail"]
 
 
 def test_replay_nonce_rejected() -> None:
@@ -66,4 +66,4 @@ def test_replay_nonce_rejected() -> None:
         # Replayed second request with same nonce fails
         res2 = client.post(path, headers=headers)
         assert res2.status_code == 401
-        assert "replayed controller request" in res2.json()["detail"]
+        assert "replayed controller request" in res2.json()["error"]["detail"]

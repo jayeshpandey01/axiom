@@ -18,10 +18,21 @@ import httpx
 
 from controller.analyzer import (
     ContentDiscoveryAnalyzer,
+    CORSAnalyzer,
+    CRLFAnalyzer,
     DalfoxAnalyzer,
+    DNSXAnalyzer,
+    FeroxbusterAnalyzer,
+    GitleaksAnalyzer,
+    InteractshAnalyzer,
+    KatanaAnalyzer,
+    NaabuAnalyzer,
     NucleiAnalyzer,
     PortScanAnalyzer,
+    SSTIAnalyzer,
+    SubdomainTakeoverAnalyzer,
     VulnerabilityAnalyzer,
+    WAFDetectionAnalyzer,
     ZAPAnalyzer,
 )
 from controller.config import settings
@@ -400,6 +411,275 @@ def parse_zap_output(output_file: Path) -> dict[str, Any]:
     return analyzer.analyze(data)
 
 
+def parse_interactsh_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON or JSONL interaction logs from ProjectDiscovery Interactsh."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "interaction_types": [],
+        "callback_hosts": [],
+        "total_interactions_count": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8", errors="replace").strip()
+    if not content:
+        return default_empty
+
+    records: list[dict[str, Any]] = []
+    try:
+        data = json.loads(content)
+        if isinstance(data, list):
+            records = data
+        elif isinstance(data, dict):
+            records = [data]
+    except json.JSONDecodeError:
+        for line in content.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+
+    analyzer = InteractshAnalyzer()
+    return analyzer.analyze(records)
+
+
+
+def parse_katana_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON Lines output from Katana web crawler."""
+    default_empty = {
+        "endpoints_discovered": 0,
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "endpoints": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    records: list[dict[str, Any]] = []
+    for line in output_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            pass
+    return KatanaAnalyzer().analyze(records)
+
+
+def parse_feroxbuster_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON/JSONL output from Feroxbuster recursive content discovery."""
+    default_empty = {
+        "paths_discovered": 0,
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    raw = output_file.read_text(encoding="utf-8", errors="replace").strip()
+    if not raw:
+        return default_empty
+    records: list[dict[str, Any]] = []
+    if raw.startswith("["):
+        try:
+            data = json.loads(raw)
+            if isinstance(data, list):
+                records = data
+        except json.JSONDecodeError:
+            pass
+    if not records:
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    return FeroxbusterAnalyzer().analyze(records)
+
+
+def parse_dnsx_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON Lines output from DNSX resolution."""
+    default_empty = {
+        "hosts_resolved": 0,
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    records: list[dict[str, Any]] = []
+    for line in output_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            pass
+    return DNSXAnalyzer().analyze(records)
+
+
+def parse_subzy_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON output from Subzy subdomain takeover scanner."""
+    default_empty = {
+        "subdomains_checked": 0,
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    raw = output_file.read_text(encoding="utf-8", errors="replace").strip()
+    if not raw:
+        return default_empty
+    try:
+        data = json.loads(raw)
+        records = data if isinstance(data, list) else [data]
+    except json.JSONDecodeError:
+        records = []
+    return SubdomainTakeoverAnalyzer().analyze(records)
+
+
+def parse_naabu_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON Lines output from Naabu fast port scanner."""
+    default_empty = {
+        "open_ports_count": 0,
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    records: list[dict[str, Any]] = []
+    for line in output_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            pass
+    return NaabuAnalyzer().analyze(records)
+
+
+def parse_wafw00f_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON output from WafW00f WAF detection."""
+    default_empty = {
+        "waf_results": [],
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    raw = output_file.read_text(encoding="utf-8", errors="replace").strip()
+    if not raw:
+        return default_empty
+    try:
+        data = json.loads(raw)
+        records = data if isinstance(data, list) else [data]
+    except json.JSONDecodeError:
+        records = []
+    return WAFDetectionAnalyzer().analyze(records)
+
+
+def parse_corsy_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON output from Corsy CORS misconfiguration scanner."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    raw = output_file.read_text(encoding="utf-8", errors="replace").strip()
+    if not raw:
+        return default_empty
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            # Corsy often formats as {"https://example.com": [{"class": ...}]}
+            records = []
+            for url, findings in data.items():
+                if isinstance(findings, list):
+                    for f in findings:
+                        if isinstance(f, dict):
+                            f["url"] = url
+                            records.append(f)
+                        else:
+                            records.append({"url": url, "class": str(f)})
+                else:
+                    records.append({"url": url, "class": str(findings)})
+        elif isinstance(data, list):
+            records = data
+        else:
+            records = []
+    except json.JSONDecodeError:
+        records = []
+    return CORSAnalyzer().analyze(records)
+
+
+def parse_crlfuzz_output(output_file: Path) -> dict[str, Any]:
+    """Parse output from CRLFuzz injection scanner."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    records: list[dict[str, Any]] = []
+    for line in output_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+            records.append(data if isinstance(data, dict) else {"url": line})
+        except json.JSONDecodeError:
+            records.append({"url": line})
+    return CRLFAnalyzer().analyze(records)
+
+
+def parse_sstimap_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON output from SSTImap template injection scanner."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    raw = output_file.read_text(encoding="utf-8", errors="replace").strip()
+    if not raw:
+        return default_empty
+    try:
+        data = json.loads(raw)
+        records = data if isinstance(data, list) else [data]
+    except json.JSONDecodeError:
+        records = []
+    return SSTIAnalyzer().analyze(records)
+
+
+def parse_gitleaks_output(output_file: Path) -> dict[str, Any]:
+    """Parse JSON report from Gitleaks secret scanner."""
+    default_empty = {
+        "secrets_found": 0,
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+    }
+    if not output_file.exists():
+        return default_empty
+    raw = output_file.read_text(encoding="utf-8", errors="replace").strip()
+    if not raw:
+        return default_empty
+    try:
+        data = json.loads(raw)
+        records = data if isinstance(data, list) else [data]
+    except json.JSONDecodeError:
+        records = []
+    return GitleaksAnalyzer().analyze(records)
+
+
 # Dispatch table: profile name → parser function
 _PARSER_MAP: dict[str, Any] = {
     "recon": parse_httpx_output,
@@ -410,10 +690,21 @@ _PARSER_MAP: dict[str, Any] = {
     "vuln-assessment": parse_nuclei_output,
     "xss-scan": parse_dalfox_output,
     "dast-zap": parse_zap_output,
+    "oob-interaction": parse_interactsh_output,
+    "web-crawl": parse_katana_output,
+    "deep-content-discovery": parse_feroxbuster_output,
+    "dns-recon": parse_dnsx_output,
+    "subdomain-takeover": parse_subzy_output,
+    "smart-portscan": parse_naabu_output,
+    "waf-detect": parse_wafw00f_output,
+    "cors-audit": parse_corsy_output,
+    "crlf-scan": parse_crlfuzz_output,
+    "ssti-scan": parse_sstimap_output,
     "sast-joern": parse_joern_output,
     "sast-semgrep": parse_semgrep_output,
     "sast-trufflehog": parse_trufflehog_output,
     "sast-codeql": parse_codeql_output,
+    "sast-gitleaks": parse_gitleaks_output,
 }
 
 

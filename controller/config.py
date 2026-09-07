@@ -20,6 +20,11 @@ class ControllerSettings(BaseSettings):
     # Path to the FFUF wordlist used in content-discovery profile.
     # Override with CONTROLLER_FFUF_WORDLIST env var on the controller VPS.
     ffuf_wordlist: str = _AXIOM_WORDLIST if Path(_AXIOM_WORDLIST).exists() else _BUNDLED_WORDLIST
+    # Interactsh OOB callback infrastructure configuration
+    interactsh_server: str | None = None
+    interactsh_token: str | None = None
+    interactsh_disable: bool = False
+    interactsh_poll_duration_sec: int = 15
 
 
 settings = ControllerSettings()
