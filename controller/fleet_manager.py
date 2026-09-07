@@ -360,6 +360,96 @@ class FleetManager:
             ]
             output_file_path.write_text(json.dumps(dalfox_findings, indent=2) + "\n", encoding="utf-8")
 
+        elif profile.name == "dast-zap":
+            # OWASP ZAP standard JSON alert structure
+            zap_report = {
+                "@version": "2.14.0",
+                "@generated": "2026-09-07",
+                "site": [
+                    {
+                        "@name": f"https://{target_value}",
+                        "@host": target_value,
+                        "@port": "443",
+                        "@ssl": "true",
+                        "alerts": [
+                            {
+                                "pluginid": "40012",
+                                "alertRef": "40012",
+                                "alert": "Cross Site Scripting (Reflected)",
+                                "name": "Cross Site Scripting (Reflected)",
+                                "riskcode": "3",
+                                "confidence": "3",
+                                "riskdesc": "High (High)",
+                                "desc": "Cross-site Scripting (XSS) is an attack technique that involves injecting malicious code into web pages.",
+                                "instances": [
+                                    {
+                                        "uri": f"https://{target_value}/search?q=test",
+                                        "method": "GET",
+                                        "param": "q",
+                                        "attack": "<script>alert(1)</script>",
+                                        "evidence": "<script>alert(1)</script>",
+                                    }
+                                ],
+                                "count": "1",
+                                "solution": "Contextually encode all user-controlled data before inserting into HTML responses.",
+                                "reference": "https://owasp.org/www-community/attacks/xss/",
+                                "cweid": "79",
+                                "wascid": "8",
+                            },
+                            {
+                                "pluginid": "10038",
+                                "alertRef": "10038",
+                                "alert": "Content Security Policy (CSP) Header Not Set",
+                                "name": "Content Security Policy (CSP) Header Not Set",
+                                "riskcode": "2",
+                                "confidence": "3",
+                                "riskdesc": "Medium (High)",
+                                "desc": "Content Security Policy (CSP) is an added layer of security that helps detect and mitigate attacks.",
+                                "instances": [
+                                    {
+                                        "uri": f"https://{target_value}/",
+                                        "method": "GET",
+                                        "param": "",
+                                        "attack": "",
+                                        "evidence": "",
+                                    }
+                                ],
+                                "count": "1",
+                                "solution": "Ensure that your web server, application server, or load balancer sets a Content-Security-Policy header.",
+                                "reference": "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP",
+                                "cweid": "693",
+                                "wascid": "15",
+                            },
+                            {
+                                "pluginid": "10020",
+                                "alertRef": "10020",
+                                "alert": "Missing Anti-clickjacking Header",
+                                "name": "Missing Anti-clickjacking Header",
+                                "riskcode": "1",
+                                "confidence": "2",
+                                "riskdesc": "Low (Medium)",
+                                "desc": "The response does not include either Content-Security-Policy with frame-ancestors or X-Frame-Options.",
+                                "instances": [
+                                    {
+                                        "uri": f"https://{target_value}/login",
+                                        "method": "GET",
+                                        "param": "",
+                                        "attack": "",
+                                        "evidence": "",
+                                    }
+                                ],
+                                "count": "1",
+                                "solution": "Modern web applications should use the Content-Security-Policy header with the 'frame-ancestors' directive.",
+                                "reference": "https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html",
+                                "cweid": "1021",
+                                "wascid": "15",
+                            },
+                        ],
+                    }
+                ],
+            }
+            output_file_path.write_text(json.dumps(zap_report, indent=2) + "\n", encoding="utf-8")
+
         elif profile.name == "sast-joern":
             # Joern structured SAST findings output format
             findings = [
@@ -796,6 +886,17 @@ class FleetManager:
                 "file",
                 str(target_file),
                 "-o",
+                str(output_file_path),
+            ] + profile.extra_flags
+
+        elif profile.name == "dast-zap":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            target_url = target_value if target_value.startswith("http") else f"https://{target_value}"
+            return [
+                scanner_bin,
+                "-t",
+                str(target_url),
+                "-J",
                 str(output_file_path),
             ] + profile.extra_flags
 

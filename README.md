@@ -22,6 +22,7 @@ FastAPI service for scheduling **authorized** security testing jobs. It delibera
 | `content-discovery` | ffuf | Web directory, route, and endpoint enumeration via fuzzing |
 | `vuln-assessment` | nuclei | Template-based vulnerability detection (info → critical severity) |
 | `xss-scan` | dalfox | Automated parameter analysis & XSS (Reflected, Stored, DOM) scanning |
+| `dast-zap` | zap | Automated web application vulnerability scan via OWASP ZAP (passive & active) |
 
 #### Static Application Security Testing (SAST)
 | Profile | Scanner | Purpose |

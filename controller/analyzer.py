@@ -6,6 +6,7 @@ severity-ranked findings and risk scores.
 """
 
 import json
+import re
 from typing import Any
 
 
@@ -748,4 +749,150 @@ class DalfoxAnalyzer:
             "verified_xss_count": verified_count,
             "tested_urls": sorted(list(tested_urls)),
         }
+
+
+class ZAPAnalyzer:
+    """Evaluates OWASP ZAP (Zed Attack Proxy) active & passive security scan reports.
+
+    Parses ZAP JSON alert structures, maps ZAP risk codes to standardized
+    severity levels (Critical, High, Medium, Low, Info), extracts CWE/WASC taxonomies,
+    isolates vulnerable parameters and endpoints, and generates actionable remediation guidance.
+    """
+
+    @staticmethod
+    def _strip_html(text: str | None) -> str:
+        if not text:
+            return ""
+        return re.sub(r"<[^>]+>", " ", str(text)).strip()
+
+    def analyze(self, raw_data: dict[str, Any] | list[Any] | str) -> dict[str, Any]:
+        """Analyze OWASP ZAP report JSON and produce normalized findings and risk summary."""
+        zap_obj: dict[str, Any] = {}
+        if isinstance(raw_data, str):
+            try:
+                zap_obj = json.loads(raw_data)
+            except Exception:
+                zap_obj = {}
+        elif isinstance(raw_data, dict):
+            zap_obj = raw_data
+        elif isinstance(raw_data, list):
+            zap_obj = {"alerts": raw_data}
+
+        # Extract alerts list across various ZAP report formats
+        alerts: list[dict[str, Any]] = []
+        if "site" in zap_obj:
+            sites = zap_obj["site"]
+            if isinstance(sites, dict):
+                sites = [sites]
+            if isinstance(sites, list):
+                for s in sites:
+                    if isinstance(s, dict) and "alerts" in s and isinstance(s["alerts"], list):
+                        alerts.extend(s["alerts"])
+        elif "alerts" in zap_obj and isinstance(zap_obj["alerts"], list):
+            alerts = zap_obj["alerts"]
+
+        findings: list[dict[str, Any]] = []
+        finding_id_counter = 1
+        tested_urls: set[str] = set()
+        vulnerable_params: set[str] = set()
+
+        for alert in alerts:
+            if not isinstance(alert, dict):
+                continue
+
+            raw_title = alert.get("alert") or alert.get("name") or "OWASP ZAP Finding"
+            title = self._strip_html(raw_title)
+            plugin_id = str(alert.get("pluginid") or alert.get("alertRef") or "zap")
+            risk_code = str(alert.get("riskcode", "1"))
+            confidence = str(alert.get("confidence", "2"))
+
+            # Determine severity
+            if risk_code == "3":
+                # High severity; promote to Critical if high confidence and critical attack pattern
+                crit_keywords = ["remote code execution", "sql injection", "command injection", "rce"]
+                if confidence == "3" and any(k in title.lower() for k in crit_keywords):
+                    severity = "CRITICAL"
+                else:
+                    severity = "HIGH"
+            elif risk_code == "2":
+                severity = "MEDIUM"
+            elif risk_code == "1":
+                severity = "LOW"
+            else:
+                severity = "INFO"
+
+            # CWE and WASC mappings
+            cwe_id = alert.get("cweid")
+            cwe_str = f"CWE-{cwe_id}" if cwe_id and str(cwe_id) != "0" else None
+            wasc_id = alert.get("wascid")
+            wasc_str = f"WASC-{wasc_id}" if wasc_id and str(wasc_id) != "0" else None
+
+            desc = self._strip_html(alert.get("desc") or alert.get("description") or title)
+            solution = self._strip_html(alert.get("solution")) or "Review and apply security patches to remediate the identified flaw."
+            reference = self._strip_html(alert.get("reference"))
+
+            instances = alert.get("instances", [])
+            instance_data = []
+            if isinstance(instances, list):
+                for inst in instances:
+                    if isinstance(inst, dict):
+                        uri = inst.get("uri")
+                        if uri:
+                            tested_urls.add(str(uri))
+                        param = inst.get("param")
+                        if param:
+                            vulnerable_params.add(str(param))
+                        instance_data.append(
+                            {
+                                "uri": uri,
+                                "method": inst.get("method"),
+                                "param": param,
+                                "attack": inst.get("attack"),
+                                "evidence": inst.get("evidence"),
+                            }
+                        )
+
+            evidence = {
+                "plugin_id": plugin_id,
+                "cwe": cwe_str,
+                "wasc": wasc_str,
+                "risk_desc": alert.get("riskdesc", ""),
+                "confidence": confidence,
+                "instances_count": len(instance_data) or int(alert.get("count", 1)),
+                "instances": instance_data[:10],
+                "reference": reference,
+            }
+
+            code = f"zap/{plugin_id}"
+            findings.append(
+                {
+                    "id": f"SEC-{finding_id_counter:03d}",
+                    "code": code,
+                    "logs": f"[{code}] {title} (Risk: {risk_code}, Confidence: {confidence}) | {desc[:200]}",
+                    "severity": severity,
+                    "title": title,
+                    "description": desc,
+                    "evidence": evidence,
+                    "remediation": solution,
+                }
+            )
+            finding_id_counter += 1
+
+        risk_summary = {
+            "critical": sum(1 for f in findings if f["severity"] == "CRITICAL"),
+            "high": sum(1 for f in findings if f["severity"] == "HIGH"),
+            "medium": sum(1 for f in findings if f["severity"] == "MEDIUM"),
+            "low": sum(1 for f in findings if f["severity"] == "LOW"),
+            "info": sum(1 for f in findings if f["severity"] == "INFO"),
+            "total": len(findings),
+        }
+
+        return {
+            "risk_summary": risk_summary,
+            "findings": findings,
+            "tested_urls": sorted(list(tested_urls)),
+            "vulnerable_parameters": sorted(list(vulnerable_params)),
+            "total_alerts_count": len(findings),
+        }
+
 

@@ -86,6 +86,14 @@ DAST_PROFILES: dict[str, ScannerProfile] = {
         extra_flags=["--silence", "--format", "json", "--mining-dict", "--mining-dom"],
         standalone_binary="dalfox",
     ),
+    "dast-zap": ScannerProfile(
+        name="dast-zap",
+        axiom_module="zap",
+        description="Automated web application security scan via OWASP ZAP (passive & active vulnerability assessment)",
+        default_timeout_sec=1800,
+        extra_flags=["-I"],
+        standalone_binary="zap-baseline.py",
+    ),
 }
 
 # SAST / Source code analysis profiles

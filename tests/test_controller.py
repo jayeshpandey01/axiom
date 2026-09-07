@@ -52,6 +52,12 @@ def test_new_profiles_exist() -> None:
     assert dalfox_profile.standalone_binary == "dalfox"
     assert "--silence" in dalfox_profile.extra_flags
 
+    zap_profile = get_profile("dast-zap")
+    assert zap_profile.name == "dast-zap"
+    assert zap_profile.axiom_module == "zap"
+    assert zap_profile.standalone_binary == "zap-baseline.py"
+
+
 
 def test_fleet_manager_enforces_max_fleet_size() -> None:
     manager = FleetManager(dry_run=True)

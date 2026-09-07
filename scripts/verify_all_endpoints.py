@@ -34,7 +34,7 @@ def run_verification():
     res = client.get("/v1/profiles")
     assert res.status_code == 200
     dast_profiles = [p["profile"] for p in res.json()["dast_profiles"]]
-    expected_dast = ["recon", "web-discovery", "network-portscan", "fast-portscan", "content-discovery", "vuln-assessment", "xss-scan"]
+    expected_dast = ["recon", "web-discovery", "network-portscan", "fast-portscan", "content-discovery", "vuln-assessment", "xss-scan", "dast-zap"]
     for p in expected_dast:
         assert p in dast_profiles, f"Missing DAST profile: {p}"
     print(f"[PASS] 2. GET /v1/profiles -> All {len(dast_profiles)} DAST profiles registered ({', '.join(dast_profiles)})")

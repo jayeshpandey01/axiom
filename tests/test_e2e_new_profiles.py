@@ -21,6 +21,7 @@ from controller.agent import (
     parse_masscan_output,
     parse_nmap_output,
     parse_nuclei_output,
+    parse_zap_output,
 )
 
 # ---------------------------------------------------------------------------
@@ -342,6 +343,44 @@ def test_dalfox_scan_lifecycle() -> None:
         assert "q" in result["summary"]["vulnerable_parameters"]
 
 
+def test_zap_scan_lifecycle() -> None:
+    """Full lifecycle test for dast-zap (OWASP ZAP) profile."""
+    with TestClient(app) as client:
+        settings = get_settings()
+        _target_id, scan_id = _register_and_queue(client, "dast-zap")
+
+        # Verify queued
+        status_res = client.get(f"/v1/scans/{scan_id}", headers={"X-API-Key": settings.api_key})
+        assert status_res.status_code == 200
+        assert status_res.json()["status"] == "queued"
+        assert status_res.json()["profile"] == "dast-zap"
+
+        # Controller claims and completes with ZAP-style summary
+        zap_summary = {
+            "risk_summary": {"critical": 0, "high": 1, "medium": 1, "low": 1, "info": 0, "total": 3},
+            "findings": [
+                {
+                    "id": "SEC-001",
+                    "code": "zap/40012",
+                    "title": "Cross Site Scripting (Reflected)",
+                    "severity": "HIGH",
+                }
+            ],
+            "tested_urls": ["https://example.com/search?q=test"],
+            "vulnerable_parameters": ["q"],
+            "total_alerts_count": 3,
+        }
+        _claim_and_complete(client, scan_id, zap_summary)
+
+        # Operator retrieves normalized scan result
+        result_res = client.get(f"/v1/scans/{scan_id}/result", headers={"X-API-Key": settings.api_key})
+        assert result_res.status_code == 200
+        result = result_res.json()
+        assert result["scan_job_id"] == scan_id
+        assert result["summary"]["risk_summary"]["high"] == 1
+        assert "q" in result["summary"]["vulnerable_parameters"]
+
+
 # ---------------------------------------------------------------------------
 # Parser unit tests (no server needed)
 # ---------------------------------------------------------------------------
@@ -441,5 +480,21 @@ def test_parse_codeql_output_from_dry_run(tmp_path):
     assert result["risk_summary"]["critical"] >= 1
     assert result["risk_summary"]["high"] >= 1
     assert result["scanned_files_count"] >= 1
+
+
+def test_parse_zap_output_from_dry_run(tmp_path):
+    from controller.fleet_manager import FleetManager
+    from controller.profiles import get_profile
+
+    manager = FleetManager(dry_run=True)
+    manager.work_dir = tmp_path
+    output_file = tmp_path / "zap_report.json"
+    manager._write_dry_run_output(get_profile("dast-zap"), "example.com", output_file)
+    result = parse_zap_output(output_file)
+    assert result["risk_summary"]["total"] >= 3
+    assert result["risk_summary"]["high"] >= 1
+    assert "q" in result["vulnerable_parameters"]
+    assert len(result["tested_urls"]) >= 1
+
 
 

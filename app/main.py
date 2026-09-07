@@ -131,6 +131,11 @@ def get_dast_profiles() -> dict[str, Any]:
                 "scanner": "dalfox",
                 "purpose": "Automated parameter analysis and XSS (Reflected, Stored, DOM) vulnerability scanning via DalFox",
             },
+            {
+                "profile": "dast-zap",
+                "scanner": "zap",
+                "purpose": "Automated web application vulnerability and active/passive security scanning via OWASP ZAP",
+            },
         ]
     }
 

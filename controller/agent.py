@@ -22,6 +22,7 @@ from controller.analyzer import (
     NucleiAnalyzer,
     PortScanAnalyzer,
     VulnerabilityAnalyzer,
+    ZAPAnalyzer,
 )
 from controller.config import settings
 from controller.fleet_manager import FleetManager
@@ -374,6 +375,31 @@ def parse_codeql_output(output_file: Path) -> dict[str, Any]:
     return analyzer.analyze(data)
 
 
+def parse_zap_output(output_file: Path) -> dict[str, Any]:
+    """Parse OWASP ZAP report JSON and analyze detected vulnerabilities."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "tested_urls": [],
+        "vulnerable_parameters": [],
+        "total_alerts_count": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8", errors="replace").strip()
+    if not content:
+        return default_empty
+
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return default_empty
+
+    analyzer = ZAPAnalyzer()
+    return analyzer.analyze(data)
+
+
 # Dispatch table: profile name → parser function
 _PARSER_MAP: dict[str, Any] = {
     "recon": parse_httpx_output,
@@ -383,6 +409,7 @@ _PARSER_MAP: dict[str, Any] = {
     "content-discovery": parse_ffuf_output,
     "vuln-assessment": parse_nuclei_output,
     "xss-scan": parse_dalfox_output,
+    "dast-zap": parse_zap_output,
     "sast-joern": parse_joern_output,
     "sast-semgrep": parse_semgrep_output,
     "sast-trufflehog": parse_trufflehog_output,

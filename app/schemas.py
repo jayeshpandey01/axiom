@@ -14,6 +14,7 @@ SAFE_PROFILES = {
     "content-discovery",
     "vuln-assessment",
     "xss-scan",
+    "dast-zap",
 }
 
 # DAST profile literal used for standard /v1/scans endpoint
@@ -25,6 +26,7 @@ ProfileLiteral = Literal[
     "content-discovery",
     "vuln-assessment",
     "xss-scan",
+    "dast-zap",
 ]
 
 # SAST profile definitions for /v1/sast/scans
@@ -53,6 +55,7 @@ AllProfileLiteral = Literal[
     "content-discovery",
     "vuln-assessment",
     "xss-scan",
+    "dast-zap",
     "sast-joern",
     "sast-semgrep",
     "sast-trufflehog",
