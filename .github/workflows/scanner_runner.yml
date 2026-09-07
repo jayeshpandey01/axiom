@@ -39,12 +39,16 @@ jobs:
           # FFUF
           curl -sL https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_linux_amd64.tar.gz -o ffuf.tar.gz
           tar -xzf ffuf.tar.gz ffuf && sudo mv ffuf /usr/local/bin/ && rm -f ffuf.tar.gz
+          # DalFox XSS Scanner
+          curl -sL https://github.com/hahwul/dalfox/releases/download/v2.9.3/dalfox_2.9.3_linux_amd64.tar.gz -o dalfox.tar.gz
+          tar -xzf dalfox.tar.gz dalfox && sudo mv dalfox /usr/local/bin/ && rm -f dalfox.tar.gz
           # Initialize nuclei templates non-interactively
           nuclei -ut -duc
           # Verify versions
           httpx -version
           nuclei -version
           ffuf -V
+          dalfox version
           nmap --version
 
       - name: Install Dependencies

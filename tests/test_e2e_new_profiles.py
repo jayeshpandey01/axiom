@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.main import app
 from controller.agent import (
     generate_signed_headers,
+    parse_dalfox_output,
     parse_ffuf_output,
     parse_joern_output,
     parse_masscan_output,
@@ -240,6 +241,48 @@ def test_sast_joern_scan_lifecycle() -> None:
         assert result["summary"]["scanned_files_count"] == 5
 
 
+def test_dalfox_scan_lifecycle() -> None:
+    """Full lifecycle test for xss-scan (dalfox) profile."""
+    with TestClient(app) as client:
+        settings = get_settings()
+        _target_id, scan_id = _register_and_queue(client, "xss-scan")
+
+        # Verify queued
+        status_res = client.get(f"/v1/scans/{scan_id}", headers={"X-API-Key": settings.api_key})
+        assert status_res.status_code == 200
+        assert status_res.json()["status"] == "queued"
+        assert status_res.json()["profile"] == "xss-scan"
+
+        # Controller claims and completes with DalFox-style summary
+        dalfox_summary = {
+            "risk_summary": {"critical": 0, "high": 2, "medium": 1, "low": 0, "info": 0, "total": 3},
+            "findings": [
+                {
+                    "id": "SEC-001",
+                    "code": "DALFOX_VERIFIED_XSS",
+                    "severity": "HIGH",
+                    "title": "Verified Cross-Site Scripting (XSS) in Parameter 'q'",
+                    "description": "Exploitable reflected XSS verified in parameter q.",
+                    "evidence": {"parameter": "q", "payload": "<script>alert(1)</script>"},
+                    "remediation": "Contextual output encoding and CSP.",
+                }
+            ],
+            "vulnerable_parameters": ["q"],
+            "verified_xss_count": 1,
+            "tested_urls": ["https://example.com/search?q=test"],
+        }
+        _claim_and_complete(client, scan_id, dalfox_summary)
+
+        # Verify result
+        result_res = client.get(f"/v1/scans/{scan_id}/result", headers={"X-API-Key": settings.api_key})
+        assert result_res.status_code == 200
+        result = result_res.json()
+        assert result["scan_job_id"] == scan_id
+        assert result["summary"]["risk_summary"]["high"] == 2
+        assert result["summary"]["verified_xss_count"] == 1
+        assert "q" in result["summary"]["vulnerable_parameters"]
+
+
 # ---------------------------------------------------------------------------
 # Parser unit tests (no server needed)
 # ---------------------------------------------------------------------------
@@ -309,3 +352,19 @@ def test_parse_joern_output_from_dry_run(tmp_path):
     result = parse_joern_output(output_file)
     assert result["risk_summary"]["total"] >= 3
     assert result["risk_summary"]["critical"] >= 1
+
+
+def test_parse_dalfox_output_from_dry_run(tmp_path):
+    from controller.fleet_manager import FleetManager
+    from controller.profiles import get_profile
+
+    manager = FleetManager(dry_run=True)
+    manager.work_dir = tmp_path
+    output_file = tmp_path / "dalfox.json"
+    manager._write_dry_run_output(get_profile("xss-scan"), "example.com", output_file)
+    result = parse_dalfox_output(output_file)
+    assert result["risk_summary"]["total"] >= 3
+    assert result["risk_summary"]["high"] >= 2
+    assert result["verified_xss_count"] >= 1
+    assert "search" in result["vulnerable_parameters"]
+

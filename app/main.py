@@ -126,6 +126,11 @@ def get_dast_profiles() -> dict[str, Any]:
                 "scanner": "nuclei",
                 "purpose": "Template-based vulnerability detection (info through critical severity)",
             },
+            {
+                "profile": "xss-scan",
+                "scanner": "dalfox",
+                "purpose": "Automated parameter analysis and XSS (Reflected, Stored, DOM) vulnerability scanning via DalFox",
+            },
         ]
     }
 

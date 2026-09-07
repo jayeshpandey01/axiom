@@ -16,7 +16,13 @@ from typing import Any
 import defusedxml.ElementTree as ET
 import httpx
 
-from controller.analyzer import ContentDiscoveryAnalyzer, NucleiAnalyzer, PortScanAnalyzer, VulnerabilityAnalyzer
+from controller.analyzer import (
+    ContentDiscoveryAnalyzer,
+    DalfoxAnalyzer,
+    NucleiAnalyzer,
+    PortScanAnalyzer,
+    VulnerabilityAnalyzer,
+)
 from controller.config import settings
 from controller.fleet_manager import FleetManager
 from controller.sast_analyzer import JoernAnalyzer, SemgrepAnalyzer, TruffleHogAnalyzer
@@ -304,6 +310,46 @@ def parse_trufflehog_output(output_file: Path) -> dict[str, Any]:
     return analyzer.analyze(content)
 
 
+def parse_dalfox_output(output_file: Path) -> dict[str, Any]:
+    """Parse DalFox XSS scanner JSON/JSONL output and run vulnerability analysis."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "vulnerable_parameters": [],
+        "verified_xss_count": 0,
+        "tested_urls": [],
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8").strip()
+    if not content:
+        return default_empty
+
+    records: list[dict[str, Any]] = []
+    try:
+        data = json.loads(content)
+        if isinstance(data, list):
+            records = data
+        elif isinstance(data, dict):
+            if "results" in data and isinstance(data["results"], list):
+                records = data["results"]
+            else:
+                records = [data]
+    except json.JSONDecodeError:
+        for line in content.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+
+    analyzer = DalfoxAnalyzer()
+    return analyzer.analyze(records)
+
+
 # Dispatch table: profile name → parser function
 _PARSER_MAP: dict[str, Any] = {
     "recon": parse_httpx_output,
@@ -312,6 +358,7 @@ _PARSER_MAP: dict[str, Any] = {
     "fast-portscan": parse_masscan_output,
     "content-discovery": parse_ffuf_output,
     "vuln-assessment": parse_nuclei_output,
+    "xss-scan": parse_dalfox_output,
     "sast-joern": parse_joern_output,
     "sast-semgrep": parse_semgrep_output,
     "sast-trufflehog": parse_trufflehog_output,

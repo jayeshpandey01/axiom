@@ -312,6 +312,54 @@ class FleetManager:
             ]
             output_file_path.write_text("\n".join(json.dumps(f) for f in findings) + "\n", encoding="utf-8")
 
+        elif profile.name == "xss-scan":
+            # DalFox JSON output format (array of findings)
+            dalfox_findings = [
+                {
+                    "type": "V",
+                    "type_description": "Vulnerable - dalfox asserts this input is exploitable; act on it",
+                    "param": "search",
+                    "payload": "\"><script>alert(1)</script>",
+                    "evidence": "<input value=\"\"><script>alert(1)</script>\">",
+                    "cwe": "CWE-79",
+                    "severity": "high",
+                    "method": "GET",
+                    "url": f"https://{target_value}/search?search=%22%3E%3Cscript%3Ealert(1)%3C/script%3E",
+                    "message": "Verified XSS found in parameter 'search'",
+                    "detection_method": "dom-verification",
+                    "confidence": "high",
+                },
+                {
+                    "type": "A",
+                    "type_description": "AST-detected DOM XSS",
+                    "param": "redirect",
+                    "payload": "javascript:alert(1)",
+                    "evidence": "location.href = new URLSearchParams(location.search).get('redirect')",
+                    "cwe": "CWE-79",
+                    "severity": "high",
+                    "method": "GET",
+                    "url": f"https://{target_value}/login?redirect=javascript:alert(1)",
+                    "message": "AST-Detected DOM Cross-Site Scripting in 'redirect'",
+                    "detection_method": "ast",
+                    "confidence": "high",
+                },
+                {
+                    "type": "R",
+                    "type_description": "Reflected - payload appears in response",
+                    "param": "ref",
+                    "payload": "dalfox123",
+                    "evidence": "<span>dalfox123</span>",
+                    "cwe": "CWE-79",
+                    "severity": "medium",
+                    "method": "GET",
+                    "url": f"https://{target_value}/index?ref=dalfox123",
+                    "message": "Reflected parameter 'ref' detected",
+                    "detection_method": "reflection",
+                    "confidence": "low",
+                },
+            ]
+            output_file_path.write_text(json.dumps(dalfox_findings, indent=2) + "\n", encoding="utf-8")
+
         elif profile.name == "sast-joern":
             # Joern structured SAST findings output format
             findings = [
@@ -483,7 +531,11 @@ class FleetManager:
 
         # Write sanitized target to temporary file (used by most tools)
         target_file = self.work_dir / f"target_{fleet_name}_{int(time.time())}.txt"
-        target_file.write_text(f"{target_value}\n", encoding="utf-8")
+        if profile.name == "xss-scan" and not target_value.startswith(("http://", "https://")):
+            target_content = f"https://{target_value}\nhttp://{target_value}\n"
+        else:
+            target_content = f"{target_value}\n"
+        target_file.write_text(target_content, encoding="utf-8")
 
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -517,7 +569,9 @@ class FleetManager:
                 cmd = self._build_standalone_cmd(profile, target_value, target_file, output_file_path)
 
             result = self._run_command(cmd, timeout=profile.default_timeout_sec)
-            if result.returncode != 0:
+            # DalFox exits with 1 when findings are detected, and 0 when clean.
+            valid_codes = (0, 1) if profile.name == "xss-scan" else (0,)
+            if result.returncode not in valid_codes:
                 raise FleetError(f"Scan failed for target '{target_value}' (profile: {profile_name}): {result.stderr}")
             return output_file_path
         finally:
@@ -585,6 +639,16 @@ class FleetManager:
                 "-l",
                 str(target_file),
                 "-jle",
+                str(output_file_path),
+            ] + profile.extra_flags
+
+        elif profile.name == "xss-scan":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            return [
+                scanner_bin,
+                "file",
+                str(target_file),
+                "-o",
                 str(output_file_path),
             ] + profile.extra_flags
 

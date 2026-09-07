@@ -593,3 +593,159 @@ class NucleiAnalyzer:
             "cve_ids": cve_ids,
             "templates_matched": len(findings),
         }
+
+
+_DALFOX_SEVERITY_MAP = {
+    "critical": "CRITICAL",
+    "high": "HIGH",
+    "medium": "MEDIUM",
+    "low": "LOW",
+    "info": "INFO",
+    "informational": "INFO",
+}
+
+
+class DalfoxAnalyzer:
+    """Normalizes DalFox XSS and parameter analysis JSON findings into the standard schema.
+
+    Handles DalFox findings (Verified 'V', AST-detected 'A', Reflected 'R', Grep 'G', Informational 'I').
+    Input record schema:
+        {
+          "type": "V" | "A" | "R" | "G" | "I",
+          "type_description": str,
+          "param": str,
+          "payload": str,
+          "evidence": str,
+          "cwe": str,
+          "severity": str,
+          "method": str,
+          "url": str (or "data": str),
+          "message": str (or "message_str": str),
+          "detection_method": str,
+          "confidence": str
+        }
+    """
+
+    def analyze(self, records: list[dict[str, Any]]) -> dict[str, Any]:
+        findings: list[dict[str, Any]] = []
+        finding_id_counter = 1
+        vulnerable_params: set[str] = set()
+        tested_urls: set[str] = set()
+        verified_count = 0
+
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+
+            finding_type = str(record.get("type", "R")).strip().upper()
+            raw_severity = str(record.get("severity", "")).strip().lower()
+
+            # Map severity based on explicit field or finding type confidence
+            if raw_severity in _DALFOX_SEVERITY_MAP:
+                severity = _DALFOX_SEVERITY_MAP[raw_severity]
+            elif finding_type == "V":
+                severity = "HIGH"
+            elif finding_type == "A":
+                severity = "HIGH"
+            elif finding_type == "R":
+                severity = "MEDIUM"
+            elif finding_type == "G":
+                severity = "LOW"
+            elif finding_type == "I":
+                severity = "INFO"
+            else:
+                severity = "MEDIUM"
+
+            if finding_type == "V":
+                verified_count += 1
+
+            param = record.get("param", "") or record.get("parameter", "")
+            if param:
+                vulnerable_params.add(str(param))
+
+            payload = record.get("payload", "")
+            url = record.get("url") or record.get("data") or ""
+            if url:
+                tested_urls.add(str(url))
+
+            http_method = record.get("method", "GET")
+            cwe = record.get("cwe", "CWE-79")
+            msg = record.get("message") or record.get("message_str") or record.get("type_description") or ""
+
+            # Compose descriptive title
+            if finding_type == "V":
+                title = f"Verified Cross-Site Scripting (XSS) in Parameter '{param}'" if param else "Verified Cross-Site Scripting (XSS)"
+                code = "DALFOX_VERIFIED_XSS"
+            elif finding_type == "A":
+                title = f"AST-Detected DOM XSS in Parameter '{param}'" if param else "AST-Detected DOM Cross-Site Scripting"
+                code = "DALFOX_DOM_XSS"
+            elif finding_type == "R":
+                title = f"Reflected Input Parameter (Potential XSS) in '{param}'" if param else "Reflected Input Parameter"
+                code = "DALFOX_REFLECTED_PARAM"
+            elif finding_type == "G":
+                title = f"Heuristic Reflection Detected on '{param}'" if param else "Heuristic Reflection Detected"
+                code = "DALFOX_GREP_REFLECTION"
+            elif finding_type == "I":
+                title = msg or "DalFox Informational Observation"
+                code = "DALFOX_INFORMATIONAL"
+            else:
+                title = f"DalFox Finding ({finding_type}) in '{param}'" if param else f"DalFox Finding ({finding_type})"
+                code = f"DALFOX_{finding_type}"
+
+            description = (
+                msg
+                or f"DalFox detected a {finding_type} finding on parameter '{param}' using method {http_method} with {cwe}."
+            )
+
+            evidence_data = {
+                "url": url,
+                "parameter": param,
+                "payload": payload,
+                "method": http_method,
+                "cwe": cwe,
+                "detection_method": record.get("detection_method", "reflection"),
+                "confidence": record.get("confidence", "high" if finding_type == "V" else "low"),
+            }
+            if record.get("evidence"):
+                evidence_data["snippet"] = str(record["evidence"])
+
+            if finding_type in ("V", "A", "R", "G"):
+                remediation = (
+                    "Implement context-aware output encoding (HTML, JavaScript, Attribute, or URL encoding) "
+                    "for all user-controllable input before rendering it in the DOM. Deploy a strong Content-Security-Policy (CSP) "
+                    "without 'unsafe-inline' and sanitize untrusted HTML using DOMPurify or equivalent framework mechanisms."
+                )
+            else:
+                remediation = "Review the informational finding and update dependencies or configuration as required."
+
+            findings.append(
+                {
+                    "id": f"SEC-{finding_id_counter:03d}",
+                    "code": code,
+                    "logs": json.dumps(record, indent=2),
+                    "severity": severity,
+                    "title": title,
+                    "description": description,
+                    "evidence": evidence_data,
+                    "remediation": remediation,
+                }
+            )
+            finding_id_counter += 1
+
+        risk_summary = {
+            "critical": sum(1 for f in findings if f["severity"] == "CRITICAL"),
+            "high": sum(1 for f in findings if f["severity"] == "HIGH"),
+            "medium": sum(1 for f in findings if f["severity"] == "MEDIUM"),
+            "low": sum(1 for f in findings if f["severity"] == "LOW"),
+            "info": sum(1 for f in findings if f["severity"] == "INFO"),
+            "total": len(findings),
+        }
+
+        return {
+            "risk_summary": risk_summary,
+            "findings": findings,
+            "vulnerable_parameters": sorted(list(vulnerable_params)),
+            "verified_xss_count": verified_count,
+            "tested_urls": sorted(list(tested_urls)),
+        }
+

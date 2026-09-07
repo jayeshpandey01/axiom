@@ -21,6 +21,7 @@ FastAPI service for scheduling **authorized** security testing jobs. It delibera
 | `fast-portscan` | masscan | High-speed full port availability scan (`--rate=1000`) |
 | `content-discovery` | ffuf | Web directory, route, and endpoint enumeration via fuzzing |
 | `vuln-assessment` | nuclei | Template-based vulnerability detection (info → critical severity) |
+| `xss-scan` | dalfox | Automated parameter analysis & XSS (Reflected, Stored, DOM) scanning |
 
 #### Static Application Security Testing (SAST)
 | Profile | Scanner | Purpose |

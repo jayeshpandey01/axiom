@@ -46,6 +46,12 @@ def test_new_profiles_exist() -> None:
     assert nuclei_profile.standalone_binary == "nuclei"
     assert "-severity" in nuclei_profile.extra_flags
 
+    dalfox_profile = get_profile("xss-scan")
+    assert dalfox_profile.name == "xss-scan"
+    assert dalfox_profile.axiom_module == "dalfox"
+    assert dalfox_profile.standalone_binary == "dalfox"
+    assert "--silence" in dalfox_profile.extra_flags
+
 
 def test_fleet_manager_enforces_max_fleet_size() -> None:
     manager = FleetManager(dry_run=True)

@@ -78,6 +78,14 @@ DAST_PROFILES: dict[str, ScannerProfile] = {
         extra_flags=["-silent", "-duc", "-ni", "-severity", "info,low,medium,high,critical"],
         standalone_binary="nuclei",
     ),
+    "xss-scan": ScannerProfile(
+        name="xss-scan",
+        axiom_module="dalfox",
+        description="Automated parameter analysis and XSS (Reflected, Stored, DOM) vulnerability scanning via DalFox",
+        default_timeout_sec=1200,
+        extra_flags=["--silence", "--format", "json", "--mining-dict", "--mining-dom"],
+        standalone_binary="dalfox",
+    ),
 }
 
 # SAST / Source code analysis profiles
