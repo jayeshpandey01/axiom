@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.main import app
 from controller.agent import (
     generate_signed_headers,
+    parse_codeql_output,
     parse_dalfox_output,
     parse_ffuf_output,
     parse_joern_output,
@@ -241,6 +242,64 @@ def test_sast_joern_scan_lifecycle() -> None:
         assert result["summary"]["scanned_files_count"] == 5
 
 
+def test_sast_codeql_scan_lifecycle() -> None:
+    """Full lifecycle test for sast-codeql via dedicated /v1/sast/scans endpoints."""
+    with TestClient(app) as client:
+        settings = get_settings()
+        admin_headers = {"X-API-Key": settings.admin_api_key}
+        operator_headers = {"X-API-Key": settings.api_key}
+
+        # 1. Register target
+        suffix = uuid.uuid4().hex[:8]
+        target_res = client.post(
+            "/v1/targets",
+            headers=admin_headers,
+            json={
+                "value": f"repo-{suffix}.example.com",
+                "owner_reference": "AppSec Team",
+                "authorization_reference": "AUTH-SAST-CODEQL-TEST",
+            },
+        )
+        assert target_res.status_code == 201
+        target_id = target_res.json()["id"]
+
+        # 2. Queue scan on dedicated SAST endpoint
+        scan_res = client.post(
+            "/v1/sast/scans",
+            headers=operator_headers,
+            json={"target_id": target_id, "profile": "sast-codeql"},
+        )
+        assert scan_res.status_code == 202, scan_res.text
+        scan_id = scan_res.json()["id"]
+
+        # 3. Check status via SAST endpoint
+        status_res = client.get(f"/v1/sast/scans/{scan_id}", headers=operator_headers)
+        assert status_res.json()["status"] == "queued"
+        assert status_res.json()["profile"] == "sast-codeql"
+
+        # 4. Controller claims and completes
+        codeql_summary = {
+            "risk_summary": {"critical": 1, "high": 1, "medium": 1, "low": 0, "info": 0, "total": 3},
+            "findings": [
+                {
+                    "id": "SEC-001",
+                    "code": "codeql/py.command-line-injection",
+                    "title": "Uncontrolled command line execution",
+                    "severity": "CRITICAL",
+                }
+            ],
+            "scanned_files_count": 3,
+            "total_rules_evaluated": 3,
+        }
+        _claim_and_complete(client, scan_id, codeql_summary)
+
+        # 5. Retrieve result via SAST endpoint
+        result_res = client.get(f"/v1/sast/scans/{scan_id}/result", headers=operator_headers)
+        assert result_res.status_code == 200
+        assert result_res.json()["summary"]["risk_summary"]["critical"] == 1
+        assert result_res.json()["summary"]["scanned_files_count"] == 3
+
+
 def test_dalfox_scan_lifecycle() -> None:
     """Full lifecycle test for xss-scan (dalfox) profile."""
     with TestClient(app) as client:
@@ -367,4 +426,20 @@ def test_parse_dalfox_output_from_dry_run(tmp_path):
     assert result["risk_summary"]["high"] >= 2
     assert result["verified_xss_count"] >= 1
     assert "search" in result["vulnerable_parameters"]
+
+
+def test_parse_codeql_output_from_dry_run(tmp_path):
+    from controller.fleet_manager import FleetManager
+    from controller.profiles import get_profile
+
+    manager = FleetManager(dry_run=True)
+    manager.work_dir = tmp_path
+    output_file = tmp_path / "codeql.sarif"
+    manager._write_dry_run_output(get_profile("sast-codeql"), "my-repo", output_file)
+    result = parse_codeql_output(output_file)
+    assert result["risk_summary"]["total"] >= 3
+    assert result["risk_summary"]["critical"] >= 1
+    assert result["risk_summary"]["high"] >= 1
+    assert result["scanned_files_count"] >= 1
+
 

@@ -32,12 +32,14 @@ SAST_SAFE_PROFILES = {
     "sast-joern",
     "sast-semgrep",
     "sast-trufflehog",
+    "sast-codeql",
 }
 
 SASTProfileLiteral = Literal[
     "sast-joern",
     "sast-semgrep",
     "sast-trufflehog",
+    "sast-codeql",
 ]
 
 # Union of all profiles used by controller worker
@@ -54,6 +56,7 @@ AllProfileLiteral = Literal[
     "sast-joern",
     "sast-semgrep",
     "sast-trufflehog",
+    "sast-codeql",
 ]
 
 
@@ -83,7 +86,10 @@ class ScanCreate(BaseModel):
 
 class SASTScanCreate(BaseModel):
     target_id: UUID
-    profile: SASTProfileLiteral = Field(default="sast-joern", description="SAST analysis profile (sast-joern or sast-semgrep)")
+    profile: SASTProfileLiteral = Field(
+        default="sast-joern",
+        description="SAST analysis profile (sast-joern, sast-semgrep, sast-trufflehog, or sast-codeql)",
+    )
     rule_tags: list[str] | None = Field(default=None, description="Optional rule tags (e.g. ['sqli', 'rce', 'default'])")
 
 

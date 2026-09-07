@@ -515,6 +515,153 @@ class FleetManager:
             ndjson = "\n".join(json.dumps(r) for r in truffle_records) + "\n"
             output_file_path.write_text(ndjson, encoding="utf-8")
 
+        elif profile.name == "sast-codeql":
+            # CodeQL SARIF v2.1.0 output fixture
+            sarif_data = {
+                "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+                "version": "2.1.0",
+                "runs": [
+                    {
+                        "tool": {
+                            "driver": {
+                                "name": "CodeQL",
+                                "version": "2.16.0",
+                                "rules": [
+                                    {
+                                        "id": "py/sql-injection",
+                                        "name": "py/sql-injection",
+                                        "shortDescription": {"text": "SQL query built from user-controlled sources"},
+                                        "fullDescription": {"text": "Building a SQL query without parameterization allows SQL injection."},
+                                        "defaultConfiguration": {"level": "error"},
+                                        "properties": {
+                                            "tags": ["security", "external/cwe/cwe-089"],
+                                            "problem.severity": "error",
+                                            "security-severity": "8.8",
+                                            "precision": "high",
+                                        },
+                                        "help": {"text": "Use parameterized queries or ORM abstractions instead of concatenating raw user input."},
+                                    },
+                                    {
+                                        "id": "py/command-line-injection",
+                                        "name": "py/command-line-injection",
+                                        "shortDescription": {"text": "Uncontrolled command line execution"},
+                                        "fullDescription": {"text": "Using untrusted input in dynamic shell commands leads to arbitrary command execution."},
+                                        "defaultConfiguration": {"level": "error"},
+                                        "properties": {
+                                            "tags": ["security", "external/cwe/cwe-078"],
+                                            "problem.severity": "error",
+                                            "security-severity": "9.3",
+                                            "precision": "high",
+                                        },
+                                        "help": {"text": "Avoid executing dynamic shell commands. Use subprocess with argument lists and shell=False."},
+                                    },
+                                    {
+                                        "id": "py/weak-cryptographic-algorithm",
+                                        "name": "py/weak-cryptographic-algorithm",
+                                        "shortDescription": {"text": "Use of weak cryptographic hashing algorithm"},
+                                        "fullDescription": {"text": "MD5 and SHA-1 are cryptographically broken and should not be used for security purposes."},
+                                        "defaultConfiguration": {"level": "warning"},
+                                        "properties": {
+                                            "tags": ["security", "external/cwe/cwe-327"],
+                                            "problem.severity": "warning",
+                                            "security-severity": "4.5",
+                                            "precision": "medium",
+                                        },
+                                        "help": {"text": "Replace weak cryptographic algorithms with modern standards (SHA-256, AES-GCM)."},
+                                    },
+                                ],
+                            }
+                        },
+                        "results": [
+                            {
+                                "ruleId": "py/sql-injection",
+                                "level": "error",
+                                "message": {"text": "This SQL query depends on an untrusted parameter."},
+                                "locations": [
+                                    {
+                                        "physicalLocation": {
+                                            "artifactLocation": {"uri": f"src/{target_value}/db/queries.py"},
+                                            "region": {
+                                                "startLine": 42,
+                                                "startColumn": 5,
+                                                "endLine": 42,
+                                                "endColumn": 48,
+                                                "snippet": {"text": "cursor.execute(f'SELECT * FROM users WHERE id = {user_id}')"},
+                                            },
+                                        }
+                                    }
+                                ],
+                                "codeFlows": [
+                                    {
+                                        "threadFlows": [
+                                            {
+                                                "locations": [
+                                                    {
+                                                        "location": {
+                                                            "physicalLocation": {
+                                                                "artifactLocation": {"uri": f"src/{target_value}/api/routes.py"},
+                                                                "region": {"startLine": 18},
+                                                            },
+                                                            "message": {"text": "user_id enters from HTTP request parameter"},
+                                                        }
+                                                    },
+                                                    {
+                                                        "location": {
+                                                            "physicalLocation": {
+                                                                "artifactLocation": {"uri": f"src/{target_value}/db/queries.py"},
+                                                                "region": {"startLine": 42},
+                                                            },
+                                                            "message": {"text": "user_id is formatted into SQL query without sanitation"},
+                                                        }
+                                                    },
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                            },
+                            {
+                                "ruleId": "py/command-line-injection",
+                                "level": "error",
+                                "message": {"text": "Shell command built from untrusted input."},
+                                "locations": [
+                                    {
+                                        "physicalLocation": {
+                                            "artifactLocation": {"uri": f"src/{target_value}/utils/system.py"},
+                                            "region": {
+                                                "startLine": 105,
+                                                "startColumn": 5,
+                                                "endLine": 105,
+                                                "endColumn": 35,
+                                                "snippet": {"text": "os.system(f'tar -czf backup.tar.gz {path}')"},
+                                            },
+                                        }
+                                    }
+                                ],
+                            },
+                            {
+                                "ruleId": "py/weak-cryptographic-algorithm",
+                                "level": "warning",
+                                "message": {"text": "Insecure MD5 hashing algorithm detected."},
+                                "locations": [
+                                    {
+                                        "physicalLocation": {
+                                            "artifactLocation": {"uri": f"src/{target_value}/auth/tokens.py"},
+                                            "region": {
+                                                "startLine": 23,
+                                                "startColumn": 8,
+                                                "snippet": {"text": "token = hashlib.md5(data).hexdigest()"},
+                                            },
+                                        }
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            }
+            output_file_path.write_text(json.dumps(sarif_data, indent=2) + "\n", encoding="utf-8")
+
     # ------------------------------------------------------------------
     # Main scan execution — routes to Axiom or standalone per profile
     # ------------------------------------------------------------------
@@ -696,6 +843,18 @@ class FleetManager:
                 "--json",
                 "--exclude-paths",
                 "node_modules,venv,.venv,dist,build,target,.git",
+            ] + profile.extra_flags
+
+        elif profile.name == "sast-codeql":
+            scanner_bin = self._resolve_scanner_binary_for_profile(profile)
+            return [
+                scanner_bin,
+                "database",
+                "analyze",
+                str(target_value),
+                "--format=sarif-latest",
+                f"--output={output_file_path}",
+                "--threads=0",
             ] + profile.extra_flags
 
         else:

@@ -511,3 +511,236 @@ class TruffleHogAnalyzer:
             "scanned_files_count": len(scanned_files),
             "total_rules_evaluated": len(findings),
         }
+
+
+class CodeQLAnalyzer:
+    """Evaluates GitHub CodeQL static analysis results in SARIF v2.1.0 format.
+
+    Parses semantic AST and inter-procedural taint-tracking findings, normalizes
+    CVSS security-severity scores and SARIF problem severities, extracts CWE metadata,
+    and maps multi-step dataflow code traces into standardized Axiom findings.
+    """
+
+    def analyze(self, raw_data: dict[str, Any] | str | list[Any]) -> dict[str, Any]:
+        """Analyze CodeQL SARIF output and return normalized findings and risk summary.
+
+        Args:
+            raw_data: Can be a parsed SARIF dict, a raw JSON string, or a list of records.
+
+        Returns:
+            Standardized dict containing risk_summary, findings, scanned_files_count,
+            and total_rules_evaluated.
+        """
+        sarif_obj: dict[str, Any] = {}
+        if isinstance(raw_data, str):
+            try:
+                sarif_obj = json.loads(raw_data)
+            except Exception:
+                sarif_obj = {}
+        elif isinstance(raw_data, dict):
+            sarif_obj = raw_data
+        elif isinstance(raw_data, list) and raw_data and isinstance(raw_data[0], dict):
+            sarif_obj = raw_data[0]
+
+        findings: list[dict[str, Any]] = []
+        finding_id_counter = 1
+        scanned_files: set[str] = set()
+        total_rules_count = 0
+
+        runs = sarif_obj.get("runs", [])
+        if not isinstance(runs, list):
+            runs = []
+
+        for run in runs:
+            if not isinstance(run, dict):
+                continue
+
+            driver = run.get("tool", {}).get("driver", {})
+            rules_list = driver.get("rules", [])
+            if not isinstance(rules_list, list):
+                rules_list = []
+            total_rules_count += len(rules_list)
+
+            # Map rules by id and index
+            rules_by_id: dict[str, dict[str, Any]] = {}
+            for idx, r in enumerate(rules_list):
+                if isinstance(r, dict):
+                    rid = r.get("id")
+                    if rid:
+                        rules_by_id[str(rid)] = r
+
+            results = run.get("results", [])
+            if not isinstance(results, list):
+                results = []
+
+            for res in results:
+                if not isinstance(res, dict):
+                    continue
+
+                # 1. Resolve rule metadata
+                rule_id = res.get("ruleId")
+                rule_meta: dict[str, Any] = {}
+                if rule_id and str(rule_id) in rules_by_id:
+                    rule_meta = rules_by_id[str(rule_id)]
+                elif "ruleIndex" in res:
+                    try:
+                        rule_idx = int(res["ruleIndex"])
+                        if 0 <= rule_idx < len(rules_list):
+                            rule_meta = rules_list[rule_idx]
+                            if not rule_id:
+                                rule_id = rule_meta.get("id")
+                    except (ValueError, TypeError):
+                        pass
+
+                rule_id_str = str(rule_id or "codeql-unknown-rule")
+
+                # 2. Extract title, descriptions, and CWEs
+                rule_props = rule_meta.get("properties", {}) if isinstance(rule_meta.get("properties"), dict) else {}
+                title = (
+                    rule_meta.get("shortDescription", {}).get("text")
+                    or rule_meta.get("name")
+                    or rule_id_str.replace("-", " ").replace("/", ": ").title()
+                )
+
+                description = res.get("message", {}).get("text") or rule_meta.get("fullDescription", {}).get("text") or title
+
+                # Extract CWE tags
+                cwes: list[str] = []
+                tags = rule_props.get("tags", [])
+                if isinstance(tags, list):
+                    for tag in tags:
+                        if isinstance(tag, str):
+                            m = re.search(r"external/cwe/cwe-(\d+)", tag, re.IGNORECASE)
+                            if m:
+                                cwes.append(f"CWE-{int(m.group(1))}")
+                            elif tag.upper().startswith("CWE-"):
+                                cwes.append(tag.upper())
+
+                # 3. Determine severity
+                # Check security-severity CVSS score (e.g. "8.8", 9.2)
+                sec_score = rule_props.get("security-severity") or res.get("properties", {}).get("security-severity")
+                severity: str | None = None
+                if sec_score is not None:
+                    try:
+                        severity = score_to_severity(float(sec_score))
+                    except (ValueError, TypeError):
+                        pass
+
+                if not severity:
+                    level = res.get("level") or rule_meta.get("defaultConfiguration", {}).get("level") or rule_props.get("problem.severity")
+                    level_str = str(level).lower() if level else "warning"
+                    if level_str in ("error", "critical"):
+                        severity = "HIGH"
+                    elif level_str in ("warning", "medium"):
+                        severity = "MEDIUM"
+                    elif level_str in ("note", "low"):
+                        severity = "LOW"
+                    else:
+                        severity = "INFO"
+
+                # 4. Resolve source file location
+                locations = res.get("locations", [])
+                file_path = "unknown"
+                line_num: int | None = None
+                col_num: int | None = None
+                snippet: str | None = None
+
+                if isinstance(locations, list) and locations:
+                    first_loc = locations[0]
+                    if isinstance(first_loc, dict):
+                        phys = first_loc.get("physicalLocation", {})
+                        if isinstance(phys, dict):
+                            art = phys.get("artifactLocation", {})
+                            if isinstance(art, dict) and "uri" in art:
+                                file_path = str(art["uri"])
+                                scanned_files.add(file_path)
+
+                            region = phys.get("region", {})
+                            if isinstance(region, dict):
+                                line_num = region.get("startLine")
+                                col_num = region.get("startColumn")
+                                snip_obj = region.get("snippet", {})
+                                if isinstance(snip_obj, dict):
+                                    snippet = snip_obj.get("text")
+
+                loc_str = file_path
+                if line_num is not None:
+                    loc_str += f":{line_num}"
+
+                # 5. Extract Code Flow / Taint Dataflow Traces
+                code_flows = res.get("codeFlows", [])
+                flow_steps: list[dict[str, Any]] = []
+                if isinstance(code_flows, list):
+                    for cf in code_flows:
+                        if not isinstance(cf, dict):
+                            continue
+                        thread_flows = cf.get("threadFlows", [])
+                        if isinstance(thread_flows, list):
+                            for tf in thread_flows:
+                                if not isinstance(tf, dict):
+                                    continue
+                                tf_locs = tf.get("locations", [])
+                                if isinstance(tf_locs, list):
+                                    for tfl in tf_locs:
+                                        if not isinstance(tfl, dict):
+                                            continue
+                                        loc_item = tfl.get("location", {})
+                                        phys_item = loc_item.get("physicalLocation", {})
+                                        art_uri = phys_item.get("artifactLocation", {}).get("uri", "")
+                                        start_l = phys_item.get("region", {}).get("startLine")
+                                        msg = loc_item.get("message", {}).get("text", "")
+                                        if art_uri:
+                                            flow_steps.append({"file": str(art_uri), "line": start_l, "message": str(msg)})
+
+                # 6. Remediation advice
+                remediation = _get_remediation_for_title(title)
+                help_obj = rule_meta.get("help", {})
+                if isinstance(help_obj, dict) and help_obj.get("text"):
+                    remediation = help_obj["text"].strip()
+                elif isinstance(rule_meta.get("help"), str) and rule_meta["help"].strip():
+                    remediation = rule_meta["help"].strip()
+
+                evidence: dict[str, Any] = {
+                    "location": loc_str,
+                    "file": file_path,
+                    "line": line_num,
+                    "column": col_num,
+                    "rule_id": rule_id_str,
+                    "cwes": cwes,
+                    "snippet": snippet,
+                }
+                if flow_steps:
+                    evidence["taint_trace"] = flow_steps
+
+                code_slug = f"codeql/{rule_id_str.replace('/', '.')}"
+
+                findings.append(
+                    {
+                        "id": f"SEC-{finding_id_counter:03d}",
+                        "code": code_slug,
+                        "logs": f"[{rule_id_str}] {title} at {loc_str} | {description}",
+                        "severity": severity,
+                        "title": title,
+                        "description": description,
+                        "evidence": evidence,
+                        "remediation": remediation,
+                    }
+                )
+                finding_id_counter += 1
+
+        risk_summary = {
+            "critical": sum(1 for f in findings if f["severity"] == "CRITICAL"),
+            "high": sum(1 for f in findings if f["severity"] == "HIGH"),
+            "medium": sum(1 for f in findings if f["severity"] == "MEDIUM"),
+            "low": sum(1 for f in findings if f["severity"] == "LOW"),
+            "info": sum(1 for f in findings if f["severity"] == "INFO"),
+            "total": len(findings),
+        }
+
+        return {
+            "risk_summary": risk_summary,
+            "findings": findings,
+            "scanned_files_count": len(scanned_files),
+            "total_rules_evaluated": max(total_rules_count, len(findings)),
+        }
+

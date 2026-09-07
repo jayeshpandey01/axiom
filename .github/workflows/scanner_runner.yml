@@ -27,7 +27,6 @@ jobs:
           python-version: "3.12"
           cache: 'pip'
 
-      - name: Install Scanner Binaries (httpx, nuclei, ffuf, nmap, masscan)
       - name: Install Scanner Binaries (httpx, nuclei, ffuf, dalfox, nmap, masscan)
         run: |
           sudo apt-get update && sudo apt-get install -y nmap masscan

@@ -114,6 +114,14 @@ SAST_PROFILES: dict[str, ScannerProfile] = {
         extra_flags=["--no-verification"],
         standalone_binary="trufflehog",
     ),
+    "sast-codeql": ScannerProfile(
+        name="sast-codeql",
+        axiom_module="codeql",
+        description="Deep semantic AST and inter-procedural dataflow security analysis via GitHub CodeQL (SARIF output)",
+        default_timeout_sec=1800,
+        extra_flags=[],
+        standalone_binary="codeql",
+    ),
 }
 
 SUPPORTED_PROFILES: dict[str, ScannerProfile] = {**DAST_PROFILES, **SAST_PROFILES}

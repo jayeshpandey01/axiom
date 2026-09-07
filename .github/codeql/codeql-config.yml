@@ -1,0 +1,7 @@
+name: "Axiom CodeQL Configuration"
+
+# Exclude non-production test suites, migration scripts, and mock verification code
+paths-ignore:
+  - 'tests/**'
+  - 'scripts/**'
+  - 'alembic/versions/**'

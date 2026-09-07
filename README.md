@@ -29,6 +29,7 @@ FastAPI service for scheduling **authorized** security testing jobs. It delibera
 | `sast-joern` | joern | Code Property Graph (CPG) static code & taint-flow analysis |
 | `sast-semgrep` | semgrep | Fast semantic AST pattern matching & rule-based security audit |
 | `sast-trufflehog` | trufflehog | Automated secret scanning & live credential leak verification |
+| `sast-codeql` | codeql | Deep semantic AST Datalog queries, inter-procedural taint flow & SARIF v2.1.0 |
 
 
 

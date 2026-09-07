@@ -43,7 +43,7 @@ def run_verification():
     res = client.get("/v1/sast/profiles")
     assert res.status_code == 200
     sast_profiles = [p["profile"] for p in res.json()["sast_profiles"]]
-    expected_sast = ["sast-joern", "sast-semgrep", "sast-trufflehog"]
+    expected_sast = ["sast-joern", "sast-semgrep", "sast-trufflehog", "sast-codeql"]
     for p in expected_sast:
         assert p in sast_profiles, f"Missing SAST profile: {p}"
     print(f"[PASS] 3. GET /v1/sast/profiles -> All {len(sast_profiles)} SAST profiles registered ({', '.join(sast_profiles)})")

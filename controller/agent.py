@@ -25,7 +25,7 @@ from controller.analyzer import (
 )
 from controller.config import settings
 from controller.fleet_manager import FleetManager
-from controller.sast_analyzer import JoernAnalyzer, SemgrepAnalyzer, TruffleHogAnalyzer
+from controller.sast_analyzer import CodeQLAnalyzer, JoernAnalyzer, SemgrepAnalyzer, TruffleHogAnalyzer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("controller.agent")
@@ -350,6 +350,30 @@ def parse_dalfox_output(output_file: Path) -> dict[str, Any]:
     return analyzer.analyze(records)
 
 
+def parse_codeql_output(output_file: Path) -> dict[str, Any]:
+    """Parse SARIF v2.1.0 JSON output from GitHub CodeQL."""
+    default_empty = {
+        "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+        "findings": [],
+        "scanned_files_count": 0,
+        "total_rules_evaluated": 0,
+    }
+    if not output_file.exists():
+        return default_empty
+
+    content = output_file.read_text(encoding="utf-8", errors="replace").strip()
+    if not content:
+        return default_empty
+
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return default_empty
+
+    analyzer = CodeQLAnalyzer()
+    return analyzer.analyze(data)
+
+
 # Dispatch table: profile name → parser function
 _PARSER_MAP: dict[str, Any] = {
     "recon": parse_httpx_output,
@@ -362,6 +386,7 @@ _PARSER_MAP: dict[str, Any] = {
     "sast-joern": parse_joern_output,
     "sast-semgrep": parse_semgrep_output,
     "sast-trufflehog": parse_trufflehog_output,
+    "sast-codeql": parse_codeql_output,
 }
 
 

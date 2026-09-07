@@ -253,6 +253,18 @@ def get_sast_profiles() -> dict[str, Any]:
                 ],
                 "purpose": "Automated secret scanning and live API key/credential leak verification",
             },
+            {
+                "profile": "sast-codeql",
+                "engine": "GitHub CodeQL",
+                "languages": ["Python", "JavaScript", "TypeScript", "Java", "Kotlin", "Go", "C", "C++", "C#", "Ruby", "Swift"],
+                "capabilities": [
+                    "Deep semantic AST Datalog queries",
+                    "Inter-procedural taint flow analysis",
+                    "SARIF v2.1.0 standard output",
+                    "CWE & OWASP security classification",
+                ],
+                "purpose": "Deep semantic code analysis and inter-procedural taint-tracking via GitHub CodeQL",
+            },
         ]
     }
 
@@ -261,7 +273,7 @@ def get_sast_profiles() -> dict[str, Any]:
     "/v1/sast/scans",
     response_model=ScanRead,
     status_code=status.HTTP_202_ACCEPTED,
-    tags=["SAST Scans (Joern CPG, Semgrep & TruffleHog)"],
+    tags=["SAST Scans (Joern CPG, Semgrep, TruffleHog & CodeQL)"],
     summary="Queue SAST Code Analysis Job",
 )
 def post_sast_scan(
@@ -271,7 +283,7 @@ def post_sast_scan(
     principal: Principal = Depends(enforce_rate_limit),
     db: Session = Depends(get_db),
 ) -> ScanRead:
-    """Submit an authorized source code target for SAST analysis (Joern CPG, Semgrep, or TruffleHog)."""
+    """Submit an authorized source code target for SAST analysis (Joern, Semgrep, TruffleHog, or CodeQL)."""
     try:
         scan = queue_scan(db, payload, idempotency_key)
         record_audit(db, actor_role=principal.role, action="sast_scan.queued", resource_type="scan", resource_id=str(scan.id))
@@ -284,7 +296,7 @@ def post_sast_scan(
 @app.get(
     "/v1/sast/scans/{scan_id}",
     response_model=ScanRead,
-    tags=["SAST Scans (Joern CPG, Semgrep & TruffleHog)"],
+    tags=["SAST Scans (Joern CPG, Semgrep, TruffleHog & CodeQL)"],
     summary="Get SAST Scan Status",
 )
 def get_sast_scan(scan_id: UUID, _: Principal = Depends(enforce_rate_limit), db: Session = Depends(get_db)) -> ScanRead:
@@ -295,7 +307,7 @@ def get_sast_scan(scan_id: UUID, _: Principal = Depends(enforce_rate_limit), db:
 @app.post(
     "/v1/sast/scans/{scan_id}/cancel",
     response_model=ScanRead,
-    tags=["SAST Scans (Joern CPG, Semgrep & TruffleHog)"],
+    tags=["SAST Scans (Joern CPG, Semgrep, TruffleHog & CodeQL)"],
     summary="Cancel SAST Scan",
 )
 def post_sast_cancel(scan_id: UUID, principal: Principal = Depends(enforce_rate_limit), db: Session = Depends(get_db)) -> ScanRead:
@@ -306,8 +318,8 @@ def post_sast_cancel(scan_id: UUID, principal: Principal = Depends(enforce_rate_
 @app.get(
     "/v1/sast/scans/{scan_id}/result",
     response_model=ScanResultRead,
-    tags=["SAST Scans (Joern CPG, Semgrep & TruffleHog)"],
-    summary="Get SAST Scan Results",
+    tags=["SAST Scans (Joern CPG, Semgrep, TruffleHog & CodeQL)"],
+    summary="Retrieve Normalized SAST Findings",
 )
 def get_sast_result(scan_id: UUID, _: Principal = Depends(enforce_rate_limit), db: Session = Depends(get_db)) -> ScanResultRead:
     """Retrieve normalized SAST vulnerability findings, code snippets, line numbers, and taint flows."""

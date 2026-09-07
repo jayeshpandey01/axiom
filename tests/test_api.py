@@ -90,3 +90,28 @@ def test_sast_endpoint_accepts_sast_joern() -> None:
             json={"target_id": "00000000-0000-0000-0000-000000000000", "profile": "sast-joern"},
         )
     assert response.status_code != 422
+
+
+def test_sast_codeql_rejected_on_dast_endpoint() -> None:
+    """sast-codeql must be rejected on /v1/scans because SAST scans belong to /v1/sast/scans."""
+    settings = get_settings()
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/scans",
+            headers={"X-API-Key": settings.api_key},
+            json={"target_id": "00000000-0000-0000-0000-000000000000", "profile": "sast-codeql"},
+        )
+    assert response.status_code == 422
+
+
+def test_sast_endpoint_accepts_sast_codeql() -> None:
+    """sast-codeql must pass schema validation on the dedicated /v1/sast/scans endpoint."""
+    settings = get_settings()
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/sast/scans",
+            headers={"X-API-Key": settings.api_key},
+            json={"target_id": "00000000-0000-0000-0000-000000000000", "profile": "sast-codeql"},
+        )
+    assert response.status_code != 422
+
