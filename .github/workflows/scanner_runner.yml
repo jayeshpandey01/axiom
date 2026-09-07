@@ -41,7 +41,6 @@ jobs:
           tar -xzf ffuf.tar.gz ffuf && sudo mv ffuf /usr/local/bin/ && rm -f ffuf.tar.gz
           # DalFox XSS Scanner
           curl -sL https://github.com/hahwul/dalfox/releases/download/v2.9.3/dalfox_2.9.3_linux_amd64.tar.gz -o dalfox.tar.gz
-          tar -xzf dalfox.tar.gz dalfox && sudo mv dalfox /usr/local/bin/ && rm -f dalfox.tar.gz
           tar -xzf dalfox.tar.gz dalfox && sudo mv dalfox /usr/local/bin/ && sudo chmod +x /usr/local/bin/dalfox && rm -f dalfox.tar.gz
           # Initialize nuclei templates non-interactively
           nuclei -ut -duc

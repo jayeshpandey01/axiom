@@ -121,7 +121,11 @@ def test_trigger_cloud_scanner_skips_when_no_token():
 
 
 def test_trigger_cloud_scanner_skips_when_already_active():
-    dummy_settings = Settings(github_token="ghp_test")
+    dummy_settings = Settings(
+        github_token="ghp_test",
+        github_repo_owner="test-owner",
+        github_repo_name="test-repo",
+    )
     with (
         patch("app.github_dispatcher.get_settings", return_value=dummy_settings),
         patch("app.github_dispatcher.check_github_runner_active", return_value=True),
