@@ -12,15 +12,14 @@ Simulates all real-world security interactions:
 """
 
 import json
-import os
 import sys
-import time
 from pathlib import Path
 
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi.testclient import TestClient
+
 from app.core.config import get_settings
 from app.main import app
 from controller.agent import generate_signed_headers
@@ -96,7 +95,7 @@ def main():
     # TEST 3: RBAC & Permission Boundary Enforcement
     # -------------------------------------------------------------------------
     log_test("3. RBAC & Privilege Boundary Enforcement")
-    
+
     # 3a. Unauthenticated request
     res = client.post("/v1/targets", json={"value": "example.com", "owner_reference": "SecOps", "authorization_reference": "AUTH-01"})
     assert res.status_code == 401, f"Expected 401, got {res.status_code}"
@@ -148,7 +147,7 @@ def main():
     # TEST 5: Scan Job Queueing & Idempotency
     # -------------------------------------------------------------------------
     log_test("5. Scan Job Submission & Idempotency")
-    
+
     # 5a. Queue DalFox XSS scan
     res = client.post(
         "/v1/scans",
@@ -206,7 +205,7 @@ def main():
     # -------------------------------------------------------------------------
     log_test("7. Scan Completion & Finding Normalization")
     complete_path = f"/v1/internal/controller/jobs/{scan_id}/complete"
-    
+
     dalfox_findings = {
         "risk_summary": {"critical": 0, "high": 2, "medium": 1, "low": 0, "info": 0, "total": 3},
         "findings": [
@@ -246,7 +245,7 @@ def main():
     body = json.dumps({"summary": dalfox_findings}).encode()
     comp_headers = generate_signed_headers("POST", complete_path, body, settings.controller_shared_secret)
     comp_headers["Content-Type"] = "application/json"
-    
+
     res = client.post(complete_path, headers=comp_headers, content=body)
     assert res.status_code == 200, res.text
     log_pass("Controller reported scan completion with verified findings (200 OK)")
