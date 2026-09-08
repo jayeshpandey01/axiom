@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.api.v1.ai import router as ai_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.dast import router as dast_router
 from app.api.v1.internal.controller import router as internal_router
@@ -12,6 +13,7 @@ from app.api.v1.targets import router as targets_router
 
 v1_router = APIRouter()
 
+v1_router.include_router(ai_router, prefix="/ai")
 v1_router.include_router(targets_router, prefix="/targets")
 v1_router.include_router(dast_router, prefix="/scans")
 v1_router.include_router(sast_router, prefix="/sast")
