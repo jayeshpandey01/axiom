@@ -35,6 +35,7 @@ tags_metadata = [
     {"name": "SAST Scans", "description": "Static Application Security Testing & Secret Auditing."},
     {"name": "Audit", "description": "Administrative security audit logs and compliance event tracking."},
     {"name": "Profiles", "description": "Available scanner profile listing."},
+    {"name": "AI", "description": "AI-assisted security triage, vulnerability explanation, and remediation diff generation."},
     {"name": "Operational", "description": "Health checks and service status probes."},
 ]
 

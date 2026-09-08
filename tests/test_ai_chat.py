@@ -1,8 +1,7 @@
 """Test AI Chat & Grounded Streaming Endpoint (/v1/ai/chat)."""
 
-import json
-import pytest
 from starlette.testclient import TestClient
+
 from app.main import app
 
 client = TestClient(app)
