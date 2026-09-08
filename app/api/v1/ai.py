@@ -56,6 +56,7 @@ class AiChatResponse(BaseModel):
 
 
 def get_llm_client(api_key: Optional[str] = None):
+    key = api_key or os.getenv("TRAINIQ_API_KEY")
     key = (
         api_key
         or os.getenv("CMD_D_API_KEY")
@@ -137,6 +138,7 @@ async def ai_chat(
                     terminal_payload = {
                         "reply": "",
                         "done": True,
+                        "citations": [c.dict() for c in (req.citations or [])],
                         "citations": [c.model_dump() for c in (req.citations or [])],
                         "referenced_finding_ids": req.referenced_finding_ids or [],
                         "graph_view_mode": req.graph_view_mode,
@@ -153,6 +155,7 @@ async def ai_chat(
             fallback_text = (
                 f"### Analysis for: {req.query}\n\n"
                 f"Grounded in verified codebase evidence. Found {len(req.citations or [])} citation(s).\n\n"
+                f"To enable live TrainIQ generation, set `TRAINIQ_API_KEY` in environment."
                 f"To enable live TrainIQ generation, set `CMD_D_API_KEY` (or `TRAINIQ_API_KEY`) in environment."
             )
             words = fallback_text.split(" ")
@@ -164,6 +167,7 @@ async def ai_chat(
             terminal_payload = {
                 "reply": "",
                 "done": True,
+                "citations": [c.dict() for c in (req.citations or [])],
                 "citations": [c.model_dump() for c in (req.citations or [])],
                 "referenced_finding_ids": req.referenced_finding_ids or [],
                 "graph_view_mode": req.graph_view_mode,

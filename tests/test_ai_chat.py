@@ -60,3 +60,4 @@ def test_ai_chat_non_streaming():
     assert "reply" in data
     assert data["referenced_finding_ids"] == ["F-10291"]
     assert data["graph_view_mode"] == "control_flow"
+
