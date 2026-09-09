@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import get_settings
 
@@ -20,9 +20,10 @@ router = APIRouter(tags=["AI"])
 TRAINIQ_AVAILABLE = False
 try:
     from trainiq import cmddllm
+
     TRAINIQ_AVAILABLE = True
 except ImportError:
-    logger.info("[AI] trainiq package not installed; will use HTTP streaming fallback.")
+    logger.info("[AI] TrainIQ package not installed; will use simulated fallback.")
 
 
 class AiChatCitation(BaseModel):
@@ -45,6 +46,7 @@ class AiChatRequest(BaseModel):
     stream: bool = True
     model: Optional[str] = "cmd-d"
     temperature: Optional[float] = 0.2
+    api_key: Optional[str] = Field(None, description="Optional dynamic TrainIQ API key")
 
 
 class AiChatResponse(BaseModel):
@@ -111,7 +113,7 @@ async def ai_chat(
         {"role": "user", "content": req.query},
     ]
 
-    client = get_llm_client()
+    client = get_llm_client(req.api_key)
 
     if req.stream:
         def sse_generator():
@@ -120,43 +122,47 @@ async def ai_chat(
 
             if client:
                 try:
-                    stream_res = client.chat.completions.create(
+                    reply_text = ""
+                    resp = client.chat.completions.create(
                         messages=messages,
                         max_tokens=1024,
                         temperature=req.temperature or 0.2,
-                        stream=True,
+                        stream=False,
                     )
-                    for chunk in stream_res:
-                        delta = ""
-                        if hasattr(chunk, "choices") and chunk.choices:
-                            delta = getattr(chunk.choices[0].delta, "content", "") or ""
-                        if delta:
+                    if hasattr(resp, "choices") and resp.choices:
+                        msg = getattr(resp.choices[0], "message", None)
+                        reply_text = getattr(msg, "content", "") or ""
+
+                    if reply_text:
+                        words = reply_text.split(" ")
+                        for i, w in enumerate(words):
+                            token = w + (" " if i < len(words) - 1 else "")
                             accumulated_tokens += 1
-                            accumulated_text += delta
-                            yield f"data: {json.dumps({'reply': delta, 'done': False})}\n\n"
+                            accumulated_text += token
+                            yield f"data: {json.dumps({'reply': token, 'done': False})}\n\n"
+                            time.sleep(0.015)
 
-                    # Terminal event
-                    duration_ms = (time.time() - start_t) * 1000
-                    terminal_payload = {
-                        "reply": "",
-                        "done": True,
-                        "citations": [c.model_dump() for c in (req.citations or [])],
-                        "referenced_finding_ids": req.referenced_finding_ids or [],
-                        "graph_view_mode": req.graph_view_mode,
-                        "tokens_generated": accumulated_tokens,
-                        "duration_ms": round(duration_ms, 2),
-                    }
-                    yield f"data: {json.dumps(terminal_payload)}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
+                        duration_ms = (time.time() - start_t) * 1000
+                        terminal_payload = {
+                            "reply": "",
+                            "done": True,
+                            "citations": [c.model_dump() for c in (req.citations or [])],
+                            "referenced_finding_ids": req.referenced_finding_ids or [],
+                            "graph_view_mode": req.graph_view_mode,
+                            "tokens_generated": accumulated_tokens,
+                            "duration_ms": round(duration_ms, 2),
+                        }
+                        yield f"data: {json.dumps(terminal_payload)}\n\n"
+                        yield "data: [DONE]\n\n"
+                        return
                 except Exception as e:
-                    logger.warning("[AI] TrainIQ streaming failed: %s; falling back.", e)
+                    logger.warning("[AI] TrainIQ completion failed: %s; falling back.", e)
 
-            # Fallback simulated stream if client unavailable
+            # Fallback simulated stream if client unavailable or fails
             fallback_text = (
                 f"### Analysis for: {req.query}\n\n"
                 f"Grounded in verified codebase evidence. Found {len(req.citations or [])} citation(s).\n\n"
-                f"To enable live TrainIQ generation, set `CMD_D_API_KEY` in environment."
+                f"To enable live TrainIQ generation, ensure `TrainIQ` is installed and `CMD_D_API_KEY` is configured."
             )
             words = fallback_text.split(" ")
             for w in words:
@@ -185,10 +191,13 @@ async def ai_chat(
                 messages=messages,
                 max_tokens=1024,
                 temperature=req.temperature or 0.2,
+                stream=False,
             )
-            reply_text = resp.choices[0].message.content
+            if hasattr(resp, "choices") and resp.choices:
+                msg = getattr(resp.choices[0], "message", None)
+                reply_text = getattr(msg, "content", "") or ""
         except Exception as e:
-            logger.warning(f"[AI] TrainIQ completion error: {e}")
+            logger.warning("[AI] TrainIQ completion error: %s", e)
 
     if not reply_text:
         reply_text = f"Analyzed query: {req.query}. Verified {len(req.citations or [])} citations."
@@ -201,4 +210,3 @@ async def ai_chat(
         graph_view_mode=req.graph_view_mode,
         duration_ms=round(duration_ms, 2),
     )
-
