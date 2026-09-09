@@ -76,6 +76,11 @@ def get_llm_client(override_key: Optional[str] = None):
     return None
 
 
+DEFAULT_GENERAL_SYSTEM_PROMPT = (
+    "You are Codefy Security & Engineering AI assistant. "
+    "Answer programming, cybersecurity, and engineering questions directly, accurately, and concisely."
+)
+
 DEFAULT_SECURITY_SYSTEM_PROMPT = """You are Codefy Security Intelligence AI, an expert application security auditor.
 Provide concise, evidence-grounded vulnerability triage, taint trace analysis, and remediation diffs.
 
@@ -99,14 +104,15 @@ async def ai_chat(
 
     if req.system_prompt:
         system_prompt = req.system_prompt
-    else:
+    elif req.citations:
         context_lines = []
-        if req.citations:
-            for c in req.citations:
-                loc = f" ({c.filePath}:{c.line})" if c.filePath else ""
-                context_lines.append(f"[{c.citationIndex}] {c.section}{loc}")
-        context_str = "\n".join(context_lines) if context_lines else "No direct findings cited in scan."
+        for c in req.citations:
+            loc = f" ({c.filePath}:{c.line})" if c.filePath else ""
+            context_lines.append(f"[{c.citationIndex}] {c.section}{loc}")
+        context_str = "\n".join(context_lines)
         system_prompt = f"{DEFAULT_SECURITY_SYSTEM_PROMPT}\n\n<context>\n{context_str}\n</context>"
+    else:
+        system_prompt = DEFAULT_GENERAL_SYSTEM_PROMPT
 
     messages = [
         {"role": "system", "content": system_prompt},
