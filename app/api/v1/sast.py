@@ -119,9 +119,3 @@ def get_sast_result(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="scan is still processing")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="scan result not found")
     return result
-
-
-@router.get("/profiles", summary="List Available SAST Profiles")
-def get_sast_profiles() -> dict:
-    from app.api.v1.profiles import get_sast_profiles as _get
-    return _get()

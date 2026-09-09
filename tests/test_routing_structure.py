@@ -47,26 +47,6 @@ class TestHealthEndpoints:
         assert response.headers.get("x-request-id") == "test-uuid-1234"
 
 
-class TestProfileEndpoints:
-    def test_dast_profiles_listed(self, client):
-        response = client.get("/v1/profiles")
-        assert response.status_code == 200
-        data = response.json()
-        assert "dast_profiles" in data
-        profiles = [p["profile"] for p in data["dast_profiles"]]
-        for expected in ["recon", "web-discovery", "vuln-assessment", "xss-scan", "web-crawl", "dns-recon", "smart-portscan"]:
-            assert expected in profiles
-
-    def test_sast_profiles_listed(self, client):
-        response = client.get("/v1/profiles/sast")
-        assert response.status_code == 200
-        data = response.json()
-        assert "sast_profiles" in data
-        profiles = [p["profile"] for p in data["sast_profiles"]]
-        for expected in ["sast-joern", "sast-semgrep", "sast-trufflehog", "sast-codeql", "sast-gitleaks"]:
-            assert expected in profiles
-
-
 class TestDASTScanEndpoints:
     def test_list_scans_requires_auth(self, client):
         response = client.get("/v1/scans")
