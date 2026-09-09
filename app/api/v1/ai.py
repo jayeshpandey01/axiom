@@ -8,7 +8,9 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
+
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,8 @@ class AiChatCitation(BaseModel):
 
 
 class AiChatRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     query: str
     system_prompt: Optional[str] = None
     citations: Optional[List[AiChatCitation]] = None
@@ -41,7 +45,6 @@ class AiChatRequest(BaseModel):
     stream: bool = True
     model: Optional[str] = "cmd-d"
     temperature: Optional[float] = 0.2
-    api_key: Optional[str] = Field(None, description="Optional dynamic TrainIQ/OpenAI API key")
 
 
 class AiChatResponse(BaseModel):
@@ -52,12 +55,14 @@ class AiChatResponse(BaseModel):
     duration_ms: float = 0.0
 
 
-def get_llm_client(api_key: Optional[str] = None):
-    key = api_key or os.getenv("TRAINIQ_API_KEY")
+def get_llm_client(override_key: Optional[str] = None):
+    settings = get_settings()
     key = (
-        api_key
+        override_key
+        or settings.cmd_d_api_key
         or os.getenv("CMD_D_API_KEY")
         or os.getenv("CMDD_API_KEY")
+        or settings.trainiq_api_key
         or os.getenv("TRAINIQ_API_KEY")
         or os.getenv("CMD_D_KEY")
     )
@@ -65,7 +70,7 @@ def get_llm_client(api_key: Optional[str] = None):
         try:
             return cmddllm(api_key=key)
         except Exception as e:
-            logger.warning(f"[AI] Failed to initialize TrainIQ client: {e}")
+            logger.warning("[AI] Failed to initialize TrainIQ client: %s", e)
     return None
 
 
@@ -106,7 +111,7 @@ async def ai_chat(
         {"role": "user", "content": req.query},
     ]
 
-    client = get_llm_client(req.api_key)
+    client = get_llm_client()
 
     if req.stream:
         def sse_generator():
@@ -145,13 +150,13 @@ async def ai_chat(
                     yield "data: [DONE]\n\n"
                     return
                 except Exception as e:
-                    logger.warning(f"[AI] TrainIQ streaming failed: {e}; falling back.")
+                    logger.warning("[AI] TrainIQ streaming failed: %s; falling back.", e)
 
             # Fallback simulated stream if client unavailable
             fallback_text = (
                 f"### Analysis for: {req.query}\n\n"
                 f"Grounded in verified codebase evidence. Found {len(req.citations or [])} citation(s).\n\n"
-                f"To enable live TrainIQ generation, set `CMD_D_API_KEY` (or `TRAINIQ_API_KEY`) in environment."
+                f"To enable live TrainIQ generation, set `CMD_D_API_KEY` in environment."
             )
             words = fallback_text.split(" ")
             for w in words:

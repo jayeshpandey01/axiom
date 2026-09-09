@@ -40,6 +40,8 @@ services:
         sync: false
       - key: RESULT_RETENTION_DAYS
         value: "30"
+      - key: CMD_D_API_KEY
+        sync: false
 
   - type: worker
     name: scan-tool-worker

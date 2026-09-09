@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     interactsh_token: str | None = None
     interactsh_disable: bool = False
     interactsh_poll_duration_sec: int = 15
+    cmd_d_api_key: str | None = None
+    trainiq_api_key: str | None = None
 
     def validate_production(self) -> None:
         if self.app_env.lower() != "production":
