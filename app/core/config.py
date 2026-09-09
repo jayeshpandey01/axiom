@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     interactsh_poll_duration_sec: int = 15
     cmd_d_api_key: str | None = None
     trainiq_api_key: str | None = None
+    cmd_d_gateway_url: str = "https://i8791yv32r8c7t21387rcfvt8713cv.onrender.com"
 
     def validate_production(self) -> None:
         if self.app_env.lower() != "production":
