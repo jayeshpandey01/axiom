@@ -13,6 +13,13 @@ logger = logging.getLogger("app.operational")
 router = APIRouter(tags=["Operational"])
 
 
+@router.get("/", include_in_schema=False)
+def root():
+    """Redirect root path to interactive API documentation."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs")
+
+
 @router.get("/health", summary="Basic Health Check")
 def health() -> dict[str, str]:
     """Returns 200 OK if the service process is alive."""

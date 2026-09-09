@@ -11,6 +11,11 @@ def client():
 
 
 class TestHealthEndpoints:
+    def test_root_redirects_to_docs(self, client):
+        response = client.get("/", follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers["location"] == "/docs"
+
     def test_health_returns_ok(self, client):
         response = client.get("/health")
         assert response.status_code == 200

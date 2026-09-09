@@ -835,16 +835,16 @@ class FleetManager:
             output_file_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
 
         elif profile.name == "sast-gitleaks":
-            secrets = [
+            mock_gitleaks_output = [
                 {
                     "RuleID": "generic-api-key",
                     "File": "config/settings.py",
                     "StartLine": 12,
-                    "Match": "api_key=supersecretvalue123456",
+                    "Match": "api_key=<REDACTED>",
                     "Commit": "0000000",
                 }
             ]
-            output_file_path.write_text(json.dumps(secrets, indent=2) + "\n", encoding="utf-8")
+            output_file_path.write_text(json.dumps(mock_gitleaks_output, indent=2) + "\n", encoding="utf-8")
 
     # ------------------------------------------------------------------
     def _resolve_source_path(self, target_value: str) -> Path | None:
@@ -1032,14 +1032,13 @@ class FleetManager:
                     for detector_name, sec_regex in secret_patterns:
                         match = sec_regex.search(line)
                         if match:
-                            raw_val = match.group(0)
+                            sanitized_snippet = sec_regex.sub("<REDACTED>", line.strip()[:150])
                             findings_raw.append({
                                 "type": "secret",
                                 "detector": detector_name,
                                 "file": rel_path,
                                 "line": line_idx,
-                                "raw_secret": raw_val,
-                                "snippet": line.strip()[:150],
+                                "snippet": sanitized_snippet,
                             })
 
                     for check_id, title, severity, cwe, remediation, vuln_regex in vuln_patterns:
@@ -1063,7 +1062,6 @@ class FleetManager:
             truffle_records = []
             for f in findings_raw:
                 if f["type"] == "secret":
-                    redacted = f["raw_secret"][:4] + "..." + f["raw_secret"][-4:] if len(f["raw_secret"]) > 8 else "<REDACTED>"
                     truffle_records.append({
                         "SourceMetadata": {
                             "Data": {
@@ -1077,7 +1075,7 @@ class FleetManager:
                         "DetectorType": 1,
                         "Verified": False,
                         "Raw": "<REDACTED>",
-                        "Redacted": redacted,
+                        "Redacted": "<REDACTED>",
                         "ExtraData": {"location": f"{f['file']}:{f['line']}"},
                     })
             ndjson = "\n".join(json.dumps(r) for r in truffle_records) + "\n"
@@ -1160,7 +1158,7 @@ class FleetManager:
                         "RuleID": f.get("detector", "generic-secret").lower().replace(" ", "-"),
                         "File": f["file"],
                         "StartLine": f["line"],
-                        "Match": f.get("raw_secret", ""),
+                        "Match": f.get("snippet", "<REDACTED>"),
                         "Commit": "workspace",
                     })
             output_file_path.write_text(json.dumps(gitleaks_findings, indent=2), encoding="utf-8")
