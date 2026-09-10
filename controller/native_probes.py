@@ -383,7 +383,7 @@ async def run_native_vuln_assessment(target: str, output_file_path: Path) -> Pat
     findings_records: list[dict[str, Any]] = []
 
     async with httpx.AsyncClient(
-        verify=False,
+        verify=False,  # nosec B501
         follow_redirects=True,
         timeout=HTTP_TIMEOUT,
         limits=HTTP_LIMITS,
@@ -525,7 +525,7 @@ async def run_native_xss_scan(target: str, output_file_path: Path) -> Path:
     query_params = urllib.parse.parse_qs(parsed.query)
 
     async with httpx.AsyncClient(
-        verify=False,
+        verify=False,  # nosec B501
         follow_redirects=True,
         timeout=HTTP_TIMEOUT,
         headers={"User-Agent": DEFAULT_USER_AGENT},
@@ -550,7 +550,7 @@ async def run_native_xss_scan(target: str, output_file_path: Path) -> Path:
 
         # Test each parameter for reflection & unescaped character preservation
         for param in query_params.keys():
-            canary = f"{XSS_CANARY_PREFIX}{hashlib.md5(param.encode()).hexdigest()[:6]}"
+            canary = f"{XSS_CANARY_PREFIX}{hashlib.md5(param.encode(), usedforsecurity=False).hexdigest()[:6]}"
             test_params = dict(query_params)
             test_params[param] = [canary]
 
@@ -721,7 +721,7 @@ async def run_native_waf_detect(target: str, output_file_path: Path) -> Path:
                     return
 
     async with httpx.AsyncClient(
-        verify=False,
+        verify=False,  # nosec B501
         follow_redirects=True,
         timeout=HTTP_TIMEOUT,
         headers={"User-Agent": DEFAULT_USER_AGENT},
@@ -768,7 +768,7 @@ async def run_native_cors_audit(target: str, output_file_path: Path) -> Path:
     findings: list[dict[str, Any]] = []
 
     async with httpx.AsyncClient(
-        verify=False,
+        verify=False,  # nosec B501
         follow_redirects=False,
         timeout=HTTP_TIMEOUT,
     ) as client:
@@ -830,12 +830,12 @@ async def run_native_crlf_scan(target: str, output_file_path: Path) -> Path:
     findings: list[dict[str, Any]] = []
 
     async with httpx.AsyncClient(
-        verify=False,
+        verify=False,  # nosec B501
         follow_redirects=False,
         timeout=HTTP_TIMEOUT,
     ) as client:
         for payload in CRLF_PAYLOADS:
-            test_token = f"axm_{hashlib.md5(payload.encode()).hexdigest()[:6]}"
+            test_token = f"axm_{hashlib.md5(payload.encode(), usedforsecurity=False).hexdigest()[:6]}"
             test_url = f"{base_url.rstrip('/')}/?param=valid{payload}X-Injected-Header:{test_token}"
             try:
                 resp = await client.get(test_url)
@@ -863,7 +863,7 @@ async def run_native_ssti_scan(target: str, output_file_path: Path) -> Path:
     findings: list[dict[str, Any]] = []
 
     async with httpx.AsyncClient(
-        verify=False,
+        verify=False,  # nosec B501
         follow_redirects=True,
         timeout=HTTP_TIMEOUT,
     ) as client:
@@ -1001,7 +1001,7 @@ async def run_native_subdomain_takeover(target: str, output_file_path: Path) -> 
         except Exception:
             pass
 
-    async with httpx.AsyncClient(verify=False, timeout=HTTP_TIMEOUT) as client:
+    async with httpx.AsyncClient(verify=False, timeout=HTTP_TIMEOUT) as client:  # nosec B501
         for cname in cnames:
             for pat, service, bodies in CLOUD_TAKEOVER_FINGERPRINTS:
                 if re.search(pat, cname, re.IGNORECASE):
@@ -1041,7 +1041,7 @@ async def run_native_web_crawl(target: str, output_file_path: Path) -> Path:
     discovered_endpoints: set[str] = {base_url}
 
     async with httpx.AsyncClient(
-        verify=False,
+        verify=False,  # nosec B501
         follow_redirects=True,
         timeout=HTTP_TIMEOUT,
         headers={"User-Agent": DEFAULT_USER_AGENT},
@@ -1105,7 +1105,7 @@ async def run_native_content_discovery(
     results: list[dict[str, Any]] = []
 
     async with httpx.AsyncClient(
-        verify=False,
+        verify=False,  # nosec B501
         follow_redirects=False,
         timeout=HTTP_TIMEOUT,
         headers={"User-Agent": DEFAULT_USER_AGENT},
@@ -1114,7 +1114,7 @@ async def run_native_content_discovery(
         baseline_404_lengths: set[int] = set()
         try:
             for _ in range(2):
-                rand_path = f"/axiom_check_{hashlib.md5(str(time.time()).encode()).hexdigest()[:8]}"
+                rand_path = f"/axiom_check_{hashlib.md5(str(time.time()).encode(), usedforsecurity=False).hexdigest()[:8]}"
                 r404 = await client.get(f"{base_url}{rand_path}")
                 baseline_404_lengths.add(len(r404.content))
         except Exception:
