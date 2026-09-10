@@ -92,3 +92,10 @@ def test_sast_analyzers_have_actual_logs():
     codeql_res = CodeQLAnalyzer().analyze({"runs": [{"tool": {"driver": {"rules": [{"id": "py/test"}]}}, "results": [{"ruleId": "py/test", "message": {"text": "CodeQL finding"}}]}]})
     assert len(codeql_res["findings"]) > 0
     assert "actual_logs" in codeql_res["findings"][0]
+
+    # Bandit
+    from controller.sast_analyzer import BanditAnalyzer
+    bandit_res = BanditAnalyzer().analyze({"results": [{"test_id": "B101", "issue_severity": "HIGH", "issue_text": "assert used"}]})
+    assert len(bandit_res["findings"]) > 0
+    assert "actual_logs" in bandit_res["findings"][0]
+

@@ -14,3 +14,4 @@ axiom-py>=0.12.0
 dnspython>=2.6.0
 beautifulsoup4>=4.12.0
 
+bandit>=1.7.5

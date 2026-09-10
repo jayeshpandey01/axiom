@@ -1294,19 +1294,16 @@ class FleetManager:
                     valid_codes = (0, 1) if profile.name == "xss-scan" else (0,)
                     if result.returncode in valid_codes and output_file_path.exists() and output_file_path.stat().st_size > 0:
                         return output_file_path
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.info("CLI scanner unavailable (%s); falling back to native Python probe.", exc)
 
-                self._write_dry_run_output(profile, target_value, output_file_path)
-                return output_file_path
                 # If external scanner binary is not installed, run genuine native Python probe
                 from controller.native_probes import dispatch_native_probe
                 try:
                     return dispatch_native_probe(profile.name, target_value, output_file_path)
                 except Exception as probe_err:
-                    logger.warning("Native probe failed for %s (%s): %s. Falling back to dry-run output.", profile.name, target_value, probe_err)
-                    self._write_dry_run_output(profile, target_value, output_file_path)
-                    return output_file_path
+                    logger.error("Native probe failed for %s (%s): %s", profile.name, target_value, probe_err)
+                    raise FleetError(f"Scan failed natively for {target_value}: {probe_err}") from probe_err
         finally:
             if target_file.exists():
                 target_file.unlink(missing_ok=True)
@@ -1546,9 +1543,27 @@ class FleetManager:
         elif profile.name == "sast-gitleaks":
             scanner_bin = self._resolve_scanner_binary_for_profile(profile)
             return [
-                scanner_bin, "dir", "--path", target_value,
-                "--report-format", "json", "--report-path", str(output_file_path),
-                "--no-git",
+                scanner_bin,
+                "detect",
+                "--source",
+                str(target_value),
+                "--report-path",
+                str(output_file_path),
+            ] + profile.extra_flags
+
+        elif profile.name == "sast-bandit":
+            import sys
+            return [
+                sys.executable,
+                "-m",
+                "bandit",
+                "-r",
+                str(target_value),
+                "-f",
+                "json",
+                "-o",
+                str(output_file_path),
+                "-ll",
             ] + profile.extra_flags
 
         else:

@@ -760,3 +760,107 @@ class CodeQLAnalyzer:
             "total_rules_evaluated": max(total_rules_count, len(findings)),
         }
 
+
+class BanditAnalyzer:
+    """Analyzer for Bandit AST-based Python security scanner JSON output."""
+
+    def analyze(self, data: dict[str, Any] | list[Any]) -> dict[str, Any]:
+        findings: list[dict[str, Any]] = []
+        scanned_files: set[str] = set()
+        finding_id_counter = 1
+
+        if not isinstance(data, dict):
+            return {
+                "risk_summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0},
+                "findings": [],
+                "scanned_files_count": 0,
+                "total_rules_evaluated": 0,
+            }
+
+        results = data.get("results", [])
+        if not isinstance(results, list):
+            results = []
+
+        metrics = data.get("metrics", {}).get("_totals", {})
+        total_rules = metrics.get("loc", 0)  # rough approximation or just length of results
+
+        for res in results:
+            if not isinstance(res, dict):
+                continue
+
+            test_id = res.get("test_id", "bandit-unknown")
+            issue_text = res.get("issue_text", "Unknown Bandit finding")
+            bandit_sev = str(res.get("issue_severity", "LOW")).upper()
+            bandit_conf = str(res.get("issue_confidence", "LOW")).upper()
+
+            # Map severity
+            if bandit_sev == "HIGH":
+                if bandit_conf == "HIGH":
+                    severity = "CRITICAL"
+                else:
+                    severity = "HIGH"
+            elif bandit_sev == "MEDIUM":
+                severity = "MEDIUM"
+            else:
+                severity = "LOW"
+
+            filename = res.get("filename", "unknown")
+            line_num = res.get("line_number")
+            code_snippet = res.get("code", "")
+            scanned_files.add(filename)
+
+            cwe_info = res.get("issue_cwe", {})
+            cwes = []
+            if isinstance(cwe_info, dict) and "id" in cwe_info:
+                cwes.append(f"CWE-{cwe_info['id']}")
+
+            loc_str = filename
+            if line_num:
+                loc_str += f":{line_num}"
+
+            evidence = {
+                "location": loc_str,
+                "file": filename,
+                "line": line_num,
+                "rule_id": test_id,
+                "cwes": cwes,
+                "snippet": code_snippet,
+            }
+
+            code_slug = f"bandit/{test_id}"
+            title = res.get("test_name", test_id).replace("_", " ").title()
+
+            remediation = res.get("more_info", "")
+            if not remediation:
+                remediation = _get_remediation_for_title(title)
+
+            findings.append(
+                {
+                    "id": f"SEC-{finding_id_counter:03d}",
+                    "code": code_slug,
+                    "logs": f"[{test_id}] {title} at {loc_str} | {issue_text}",
+                    "severity": severity,
+                    "title": title,
+                    "description": issue_text,
+                    "evidence": evidence,
+                    "remediation": remediation,
+                    "actual_logs": json.dumps(res, indent=2),
+                }
+            )
+            finding_id_counter += 1
+
+        risk_summary = {
+            "critical": sum(1 for f in findings if f["severity"] == "CRITICAL"),
+            "high": sum(1 for f in findings if f["severity"] == "HIGH"),
+            "medium": sum(1 for f in findings if f["severity"] == "MEDIUM"),
+            "low": sum(1 for f in findings if f["severity"] == "LOW"),
+            "info": sum(1 for f in findings if f["severity"] == "INFO"),
+            "total": len(findings),
+        }
+
+        return {
+            "risk_summary": risk_summary,
+            "findings": findings,
+            "scanned_files_count": len(scanned_files),
+            "total_rules_evaluated": max(total_rules, len(findings)),
+        }

@@ -218,6 +218,14 @@ SAST_PROFILES: dict[str, ScannerProfile] = {
         extra_flags=["--report-format", "json"],
         standalone_binary="gitleaks",
     ),
+    "sast-bandit": ScannerProfile(
+        name="sast-bandit",
+        axiom_module="bandit",
+        description="AST-based static analyzer designed to find common security issues in Python code",
+        default_timeout_sec=600,
+        extra_flags=["-f", "json", "-q"],
+        standalone_binary="bandit",
+    ),
 }
 
 SUPPORTED_PROFILES: dict[str, ScannerProfile] = {**DAST_PROFILES, **SAST_PROFILES}

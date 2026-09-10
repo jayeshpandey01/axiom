@@ -1,0 +1,29 @@
+{
+  "errors": [],
+  "generated_at": "2026-09-11T00:30:00Z",
+  "metrics": {
+    "_totals": {
+      "CONFIDENCE.HIGH": 1,
+      "SEVERITY.HIGH": 1,
+      "loc": 10
+    }
+  },
+  "results": [
+    {
+      "code": "5     def func():\n6         pass\n",
+      "filename": "example.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 295,
+        "link": "https://cwe.mitre.org/data/definitions/295.html"
+      },
+      "issue_severity": "HIGH",
+      "issue_text": "Call to httpx with verify=False",
+      "line_number": 6,
+      "line_range": [6],
+      "more_info": "https://bandit.readthedocs.io/en/latest/",
+      "test_id": "B501",
+      "test_name": "request_with_no_cert_validation"
+    }
+  ]
+}
