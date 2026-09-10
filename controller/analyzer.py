@@ -25,9 +25,11 @@ class VulnerabilityAnalyzer:
             evidence: Any,
             remediation: str | None = None,
             logs: str | None = None,
+            actual_logs: Any = None,
         ):
             nonlocal finding_id_counter
             log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
+            actual_log_entry = actual_logs if actual_logs is not None else log_entry
             findings.append(
                 {
                     "id": f"SEC-{finding_id_counter:03d}",
@@ -38,6 +40,9 @@ class VulnerabilityAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation,
+                    "actual_logs": actual_logs,
+                    "actual_logs": actual_log_entry,
+                    "Actual_logs": actual_log_entry,
                 }
             )
             finding_id_counter += 1
@@ -94,6 +99,7 @@ class VulnerabilityAnalyzer:
                         description="The HTTP 'Server' header exposes exact software and version numbers, allowing attackers to target version-specific CVEs.",
                         evidence=f"Server: {server_str}",
                         remediation="Configure your web server to suppress version tokens (e.g. 'server_tokens off;' in Nginx or 'ServerTokens Prod' in Apache).",
+                        actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                     )
 
             # RULE 2: X-Powered-By / Framework Disclosure
@@ -106,6 +112,7 @@ class VulnerabilityAnalyzer:
                     description="The 'X-Powered-By' header exposes backend runtime/framework information.",
                     evidence=f"X-Powered-By: {powered_by}",
                     remediation="Disable the X-Powered-By header in your application configuration or reverse proxy.",
+                    actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                 )
 
             # RULE 3: Missing HSTS Header (on HTTPS services)
@@ -119,6 +126,7 @@ class VulnerabilityAnalyzer:
                         description="The website does not enforce HTTPS connections via HSTS, increasing exposure to SSL-stripping man-in-the-middle attacks.",
                         evidence="Strict-Transport-Security header is absent.",
                         remediation="Add 'Strict-Transport-Security: max-age=31536000; includeSubDomains' to your HTTPS response headers.",
+                        actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                     )
 
             # RULE 4: Missing Content-Security-Policy (CSP)
@@ -130,6 +138,7 @@ class VulnerabilityAnalyzer:
                     description="No Content-Security-Policy header was detected, reducing client-side mitigation against Cross-Site Scripting (XSS) and data injection.",
                     evidence="Content-Security-Policy header is absent.",
                     remediation="Define a strong Content-Security-Policy header restricting trusted script, style, and frame sources.",
+                    actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                 )
 
             # RULE 5: Missing X-Frame-Options (Clickjacking Protection)
@@ -141,6 +150,7 @@ class VulnerabilityAnalyzer:
                     description="The web application lacks X-Frame-Options or frame-ancestors CSP directive, allowing the page to be rendered inside an attacker's iframe.",
                     evidence="X-Frame-Options header is absent.",
                     remediation="Add 'X-Frame-Options: DENY' or 'X-Frame-Options: SAMEORIGIN' to all HTTP responses.",
+                    actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                 )
 
             # RULE 6: Missing X-Content-Type-Options
@@ -153,6 +163,7 @@ class VulnerabilityAnalyzer:
                         description="The 'X-Content-Type-Options: nosniff' header is missing, allowing browsers to MIME-sniff response content types.",
                         evidence="X-Content-Type-Options: nosniff header is absent.",
                         remediation="Add 'X-Content-Type-Options: nosniff' to HTTP responses.",
+                        actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                     )
 
             # RULE 7: Insecure Plaintext HTTP Endpoint
@@ -164,6 +175,7 @@ class VulnerabilityAnalyzer:
                     description="The endpoint accepts unencrypted HTTP connections without automatically redirecting to HTTPS.",
                     evidence=f"HTTP endpoint '{url}' returned status {code} without redirection.",
                     remediation="Enforce an automatic 301 Permanent Redirect from HTTP (port 80) to HTTPS (port 443).",
+                    actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                 )
 
             # RULE 8: Exposed Sensitive or Administrative Page Title
@@ -179,6 +191,7 @@ class VulnerabilityAnalyzer:
                             description=f"Page title '{title}' suggests an administrative or internal interface accessible on the target.",
                             evidence=f"Page Title: '{title}' on URL: {url}",
                             remediation="Ensure administrative interfaces are protected with multi-factor authentication and restricted via IP allowlisting.",
+                            actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                         )
                         break
 
@@ -264,10 +277,11 @@ class PortScanAnalyzer:
         finding_id_counter = 1
 
         def add_finding(
-            code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None
+            code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None, actual_logs: Any = None
         ) -> None:
             nonlocal finding_id_counter
             log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
+            actual_log_entry = actual_logs if actual_logs is not None else log_entry
             findings.append(
                 {
                     "id": f"SEC-{finding_id_counter:03d}",
@@ -278,6 +292,9 @@ class PortScanAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation,
+                    "actual_logs": actual_logs,
+                    "actual_logs": actual_log_entry,
+                    "Actual_logs": actual_log_entry,
                 }
             )
             finding_id_counter += 1
@@ -305,6 +322,7 @@ class PortScanAnalyzer:
                     description=f"Port {port} ({_HIGH_RISK_PORTS[port]}) is accessible. This service is a common attack target.",
                     evidence=f"{ip}:{port}/{protocol} ({service})",
                     remediation=f"Restrict access to port {port} via firewall rules. Enable authentication and encryption if the service must remain accessible.",
+                    actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                 )
 
             # RULE 2: Service version banner exposure
@@ -317,6 +335,7 @@ class PortScanAnalyzer:
                     description="The network service exposes exact product name and version, enabling targeted CVE exploitation.",
                     evidence=f"{ip}:{port} — {banner}",
                     remediation="Configure the service to suppress version information in banners.",
+                    actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                 )
 
             # RULE 3: Unencrypted cleartext service
@@ -328,6 +347,7 @@ class PortScanAnalyzer:
                     description=f"Port {port} runs an unencrypted service, allowing network eavesdropping of credentials and data.",
                     evidence=f"{ip}:{port}/{protocol} — {service or 'unknown service'}",
                     remediation="Replace this service with its TLS-encrypted equivalent or restrict access to trusted networks only.",
+                    actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                 )
 
         # RULE 4: Informational open port summary
@@ -339,6 +359,7 @@ class PortScanAnalyzer:
                 description="Summary of all TCP/UDP ports found in open state during the scan.",
                 evidence=[f"{p['ip']}:{p['port']}/{p['protocol']} ({p['service']})" for p in open_ports[:50]],
                 remediation=None,
+                actual_logs=json.dumps(open_ports[:50], indent=2),
             )
 
         risk_summary = {
@@ -408,10 +429,11 @@ class ContentDiscoveryAnalyzer:
         finding_id_counter = 1
 
         def add_finding(
-            code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None
+            code: str, severity: str, title: str, description: str, evidence: Any, remediation: str | None = None, logs: str | None = None, actual_logs: Any = None
         ) -> None:
             nonlocal finding_id_counter
             log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
+            actual_log_entry = actual_logs if actual_logs is not None else log_entry
             findings.append(
                 {
                     "id": f"SEC-{finding_id_counter:03d}",
@@ -422,6 +444,9 @@ class ContentDiscoveryAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation,
+                    "actual_logs": actual_logs,
+                    "actual_logs": actual_log_entry,
+                    "Actual_logs": actual_log_entry,
                 }
             )
             finding_id_counter += 1
@@ -453,6 +478,7 @@ class ContentDiscoveryAnalyzer:
                             description=f"A path matching the sensitive pattern '{pattern}' returned HTTP {status}. This may expose administrative interfaces, configuration files, or internal tooling.",
                             evidence=f"{url} → HTTP {status} ({length} bytes)",
                             remediation="Restrict access to this path via authentication, IP allowlisting, or remove the resource if no longer needed.",
+                            actual_logs=json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                         )
                         break  # One finding per URL
 
@@ -465,6 +491,7 @@ class ContentDiscoveryAnalyzer:
                 description="Paths returning HTTP 403 Forbidden may be accessible via URL manipulation, header injection, or verb tampering.",
                 evidence=auth_bypass_candidates[:20],
                 remediation="Verify these paths are properly protected at the application layer, not just by URL pattern matching.",
+                actual_logs=json.dumps(auth_bypass_candidates[:20], indent=2),
             )
 
         # Discovery summary
@@ -476,6 +503,7 @@ class ContentDiscoveryAnalyzer:
                 description="Summary of all paths discovered during web content fuzzing.",
                 evidence=[f"{p['url']} → HTTP {p['status']}" for p in discovered_paths[:50]],
                 remediation=None,
+                actual_logs=json.dumps(discovered_paths[:50], indent=2),
             )
 
         risk_summary = {
@@ -589,6 +617,8 @@ class NucleiAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation,
+                    "actual_logs": json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
+                    "Actual_logs": json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
                 }
             )
             finding_id_counter += 1
@@ -742,6 +772,8 @@ class DalfoxAnalyzer:
                     "description": description,
                     "evidence": evidence_data,
                     "remediation": remediation,
+                    "actual_logs": json.dumps(record, indent=2),
+                    "Actual_logs": json.dumps(record, indent=2),
                 }
             )
             finding_id_counter += 1
@@ -887,6 +919,8 @@ class ZAPAnalyzer:
                     "description": desc,
                     "evidence": evidence,
                     "remediation": solution,
+                    "actual_logs": json.dumps(alert, indent=2) if isinstance(alert, dict) else str(alert),
+                    "Actual_logs": json.dumps(alert, indent=2) if isinstance(alert, dict) else str(alert),
                 }
             )
             finding_id_counter += 1
@@ -1047,6 +1081,8 @@ class InteractshAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation,
+                    "actual_logs": json.dumps(safe_record, indent=2),
+                    "Actual_logs": json.dumps(safe_record, indent=2),
                 }
             )
             finding_id_counter += 1
@@ -1099,16 +1135,21 @@ class KatanaAnalyzer:
             lower = endpoint.lower()
             for pat in self.SENSITIVE_PATH_PATTERNS:
                 if pat in lower:
+                    evidence_dict = {"endpoint": endpoint, "pattern_matched": pat}
                     findings.append({
                         "id": f"SEC-{counter:03d}",
                         "code": "KATANA_SENSITIVE_ENDPOINT",
+                        "logs": f"[KATANA_SENSITIVE_ENDPOINT] Sensitive Endpoint Discovered: {pat} | Evidence: {evidence_dict}",
                         "severity": "MEDIUM",
                         "score": 5.3,
                         "title": f"Sensitive Endpoint Discovered: {pat}",
                         "description": f"Web crawler discovered a potentially sensitive endpoint at: {endpoint}",
                         "remediation": "Verify the endpoint is intended to be publicly accessible and apply appropriate authentication.",
                         "evidence": {"endpoint": endpoint, "pattern_matched": pat},
+                        "evidence": evidence_dict,
                         "cve_ids": [],
+                        "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                        "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
                     })
                     counter += 1
                     break
@@ -1167,16 +1208,25 @@ class FeroxbusterAnalyzer:
                         break
 
             if severity:
+                ferox_code = f"FEROX_SENSITIVE_{severity}"
+                ferox_title = f"Sensitive Path Discovered [{status_code}]: {label}"
+                ferox_ev = {"url": url, "status_code": status_code}
                 findings.append({
                     "id": f"SEC-{counter:03d}",
                     "code": f"FEROX_SENSITIVE_{severity}",
+                    "code": ferox_code,
+                    "logs": f"[{ferox_code}] {ferox_title} | Evidence: {ferox_ev}",
                     "severity": severity,
                     "score": score,
                     "title": f"Sensitive Path Discovered [{status_code}]: {label}",
+                    "title": ferox_title,
                     "description": f"Recursive content scan found accessible sensitive path at: {url}",
                     "remediation": "Restrict access to sensitive paths via WAF rules, authentication, or removal.",
                     "evidence": {"url": url, "status_code": status_code},
+                    "evidence": ferox_ev,
                     "cve_ids": [],
+                    "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                    "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
                 })
                 counter += 1
 
@@ -1210,16 +1260,21 @@ class DNSXAnalyzer:
                 for c in cname:
                     if any(svc in c for svc in ["s3.amazonaws.com", "azurewebsites.net", "herokudns.com",
                                                  "github.io", "myshopify.com", "cloudfront.net"]):
+                        dns_ev = {"host": host, "cname": c}
                         findings.append({
                             "id": f"SEC-{counter:03d}",
                             "code": "DNSX_DANGLING_CNAME",
+                            "logs": f"[DNSX_DANGLING_CNAME] Potentially Dangling CNAME: {c} | Evidence: {dns_ev}",
                             "severity": "HIGH",
                             "score": 7.5,
                             "title": f"Potentially Dangling CNAME: {c}",
                             "description": f"Host '{host}' has a CNAME pointing to '{c}' which may be claimable.",
                             "remediation": "Verify the CNAME target is still provisioned and owned. Remove or update dangling records.",
                             "evidence": {"host": host, "cname": c},
+                            "evidence": dns_ev,
                             "cve_ids": [],
+                            "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                            "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
                         })
                         counter += 1
 
@@ -1229,16 +1284,21 @@ class DNSXAnalyzer:
             if mx and isinstance(txt, list):
                 has_spf = any("v=spf1" in t for t in txt)
                 if not has_spf:
+                    spf_ev = {"host": host, "mx": mx}
                     findings.append({
                         "id": f"SEC-{counter:03d}",
                         "code": "DNSX_MISSING_SPF",
+                        "logs": f"[DNSX_MISSING_SPF] Missing SPF Record for Mail Domain: {host} | Evidence: {spf_ev}",
                         "severity": "MEDIUM",
                         "score": 5.3,
                         "title": f"Missing SPF Record for Mail Domain: {host}",
                         "description": "Domain has MX records but no SPF TXT record, enabling email spoofing.",
                         "remediation": "Add an SPF TXT record: 'v=spf1 include:yourprovider.com ~all'.",
                         "evidence": {"host": host, "mx": mx},
+                        "evidence": spf_ev,
                         "cve_ids": [],
+                        "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                        "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
                     })
                     counter += 1
 
@@ -1272,16 +1332,21 @@ class SubdomainTakeoverAnalyzer:
             service = rec.get("service", "unknown")
 
             if result in ("VULNERABLE", "VULNERABLE!", "TAKEABLE"):
+                subzy_ev = {"subdomain": subdomain, "service": service, "result": result}
                 findings.append({
                     "id": f"SEC-{counter:03d}",
                     "code": "SUBDOMAIN_TAKEOVER_VULNERABLE",
+                    "logs": f"[SUBDOMAIN_TAKEOVER_VULNERABLE] Subdomain Takeover Vulnerability: {subdomain} | Evidence: {subzy_ev}",
                     "severity": self.CONFIRMED_SEVERITY,
                     "score": 9.3,
                     "title": f"Subdomain Takeover Vulnerability: {subdomain}",
                     "description": f"'{subdomain}' has a dangling DNS record pointing to an unclaimed '{service}' resource. An attacker can claim it.",
                     "remediation": "Remove the dangling DNS CNAME record or re-provision the missing service resource immediately.",
                     "evidence": {"subdomain": subdomain, "service": service, "result": result},
+                    "evidence": subzy_ev,
                     "cve_ids": [],
+                    "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                    "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
                 })
                 counter += 1
 
@@ -1326,16 +1391,25 @@ class NaabuAnalyzer:
                 svc, sev, score = self.RISKY_PORTS[port]
                 if sev == "INFO":
                     continue
+                naabu_ev = {"host": host, "port": port, "service": svc}
+                naabu_code = f"NAABU_RISKY_PORT_{port}"
+                naabu_title = f"Risky Open Port {port} ({svc}) on {host}"
                 findings.append({
                     "id": f"SEC-{counter:03d}",
                     "code": f"NAABU_RISKY_PORT_{port}",
+                    "code": naabu_code,
+                    "logs": f"[{naabu_code}] {naabu_title} | Evidence: {naabu_ev}",
                     "severity": sev,
                     "score": score,
                     "title": f"Risky Open Port {port} ({svc}) on {host}",
+                    "title": naabu_title,
                     "description": f"Port {port} ({svc}) is open and accessible on {host}.",
                     "remediation": "Restrict access to this port via firewall rules. Only allow from trusted IP ranges.",
                     "evidence": {"host": host, "port": port, "service": svc},
+                    "evidence": naabu_ev,
                     "cve_ids": [],
+                    "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                    "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
                 })
                 counter += 1
 
@@ -1365,16 +1439,21 @@ class WAFDetectionAnalyzer:
                     name = detected.get("firewall", "Unknown WAF")
                     manufacturer = detected.get("manufacturer", "")
                     waf_results.append({"url": url, "waf": name, "manufacturer": manufacturer})
+                    waf_ev = {"url": url, "waf": name, "manufacturer": manufacturer}
                     findings.append({
                         "id": f"SEC-{counter:03d}",
                         "code": "WAF_DETECTED",
+                        "logs": f"[WAF_DETECTED] WAF Detected: {name} ({manufacturer}) | Evidence: {waf_ev}",
                         "severity": "INFO",
                         "score": 0.0,
                         "title": f"WAF Detected: {name} ({manufacturer})",
                         "description": f"Web Application Firewall '{name}' by '{manufacturer}' detected on {url}.",
                         "remediation": "Ensure WAF rules are current and tuned. Test bypass techniques regularly.",
                         "evidence": {"url": url, "waf": name, "manufacturer": manufacturer},
+                        "evidence": waf_ev,
                         "cve_ids": [],
+                        "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                        "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
                     })
                     counter += 1
 
@@ -1407,16 +1486,22 @@ class CORSAnalyzer:
             if credentials and sev in ("HIGH", "MEDIUM"):
                 sev, score = "CRITICAL", 9.3
 
+            cors_code = f"CORS_{cors_type.upper().replace(' ', '_')}"
+            cors_title = f"CORS Misconfiguration: {cors_type}"
+            cors_ev = {"url": url, "type": cors_type, "credentials": credentials}
             findings.append({
                 "id": f"SEC-{counter:03d}",
-                "code": f"CORS_{cors_type.upper().replace(' ', '_')}",
+                "code": cors_code,
+                "logs": f"[{cors_code}] {cors_title} | Evidence: {cors_ev}",
                 "severity": sev,
                 "score": score,
-                "title": f"CORS Misconfiguration: {cors_type}",
+                "title": cors_title,
                 "description": f"CORS misconfiguration ({cors_type}) detected at {url}. Credentials included: {credentials}.",
                 "remediation": "Restrict CORS policy to specific trusted origins. Never use wildcard (*) with Allow-Credentials: true.",
-                "evidence": {"url": url, "type": cors_type, "credentials": credentials},
+                "evidence": cors_ev,
                 "cve_ids": [],
+                "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
             })
             counter += 1
 
@@ -1440,16 +1525,20 @@ class CRLFAnalyzer:
         for rec in records:
             url = rec.get("url", str(rec) if isinstance(rec, str) else "")
             payload = rec.get("payload", "") if isinstance(rec, dict) else ""
+            crlf_ev = {"url": url, "payload": payload}
             findings.append({
                 "id": f"SEC-{counter:03d}",
                 "code": "CRLF_INJECTION",
+                "logs": f"[CRLF_INJECTION] CRLF Injection Vulnerability: {url} | Evidence: {crlf_ev}",
                 "severity": "MEDIUM",
                 "score": 6.1,
                 "title": f"CRLF Injection Vulnerability: {url}",
                 "description": "CRLF sequence injection confirmed. Attacker can inject arbitrary HTTP response headers, leading to cache poisoning, XSS, or session fixation.",
                 "remediation": r"Sanitize all user-controlled inputs before reflecting them in HTTP response headers. Encode newline characters (\r\n).",
-                "evidence": {"url": url, "payload": payload},
+                "evidence": crlf_ev,
                 "cve_ids": [],
+                "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
             })
             counter += 1
 
@@ -1485,16 +1574,22 @@ class SSTIAnalyzer:
             if rce_confirmed:
                 sev, score = "CRITICAL", 10.0
 
+            ssti_code = f"SSTI_{engine.upper() or 'UNKNOWN'}_INJECTION"
+            ssti_title = f"SSTI Detected ({engine or 'Unknown Engine'}): {url}"
+            ssti_ev = {"url": url, "engine": engine, "parameter": parameter, "rce": rce_confirmed}
             findings.append({
                 "id": f"SEC-{counter:03d}",
-                "code": f"SSTI_{engine.upper() or 'UNKNOWN'}_INJECTION",
+                "code": ssti_code,
+                "logs": f"[{ssti_code}] {ssti_title} | Evidence: {ssti_ev}",
                 "severity": sev,
                 "score": score,
-                "title": f"SSTI Detected ({engine or 'Unknown Engine'}): {url}",
+                "title": ssti_title,
                 "description": f"Server-Side Template Injection in '{parameter}' parameter at {url}. Engine: {engine}. RCE confirmed: {rce_confirmed}.",
                 "remediation": "Never pass user input directly into template rendering. Use sandboxed templates or strict output encoding.",
-                "evidence": {"url": url, "engine": engine, "parameter": parameter, "rce": rce_confirmed},
+                "evidence": ssti_ev,
                 "cve_ids": [],
+                "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
             })
             counter += 1
 
@@ -1532,16 +1627,22 @@ class GitleaksAnalyzer:
             severity = "CRITICAL" if any(h in rule_id for h in self.HIGH_RULES) else "HIGH"
             score = 9.8 if severity == "CRITICAL" else 8.5
 
+            git_code = f"GITLEAKS_{rule_id.upper().replace('-', '_')}"
+            git_title = f"Secret Leaked: {rule_id}"
+            git_ev = {"rule": rule_id, "file": file_path, "line": line_no, "match_redacted": redacted, "commit": commit}
             findings.append({
                 "id": f"SEC-{counter:03d}",
-                "code": f"GITLEAKS_{rule_id.upper().replace('-', '_')}",
+                "code": git_code,
+                "logs": f"[{git_code}] {git_title} at {file_path}:{line_no} | Evidence: {git_ev}",
                 "severity": severity,
                 "score": score,
-                "title": f"Secret Leaked: {rule_id}",
+                "title": git_title,
                 "description": f"Hardcoded secret of type '{rule_id}' detected at {file_path}:{line_no}.",
                 "remediation": "Immediately rotate the leaked credential. Remove from git history using 'git filter-repo' or BFG Repo Cleaner. Add to .gitignore.",
-                "evidence": {"rule": rule_id, "file": file_path, "line": line_no, "match_redacted": redacted, "commit": commit},
+                "evidence": git_ev,
                 "cve_ids": [],
+                "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+                "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
             })
             counter += 1
 

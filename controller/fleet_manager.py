@@ -1286,18 +1286,28 @@ class FleetManager:
                 return output_file_path
 
             # 4. Other standalone scanners (nmap, masscan, ffuf, dalfox, zap)
+            # 4. Other standalone scanners (nmap, masscan, ffuf, dalfox, zap, nuclei, etc.)
             else:
                 try:
                     cmd = self._build_standalone_cmd(profile, target_value, target_file, output_file_path)
                     result = self._run_command(cmd, timeout=profile.default_timeout_sec)
                     valid_codes = (0, 1) if profile.name == "xss-scan" else (0,)
                     if result.returncode in valid_codes and output_file_path.exists():
+                    if result.returncode in valid_codes and output_file_path.exists() and output_file_path.stat().st_size > 0:
                         return output_file_path
                 except Exception:
                     pass
 
                 self._write_dry_run_output(profile, target_value, output_file_path)
                 return output_file_path
+                # If external scanner binary is not installed, run genuine native Python probe
+                from controller.native_probes import dispatch_native_probe
+                try:
+                    return dispatch_native_probe(profile.name, target_value, output_file_path)
+                except Exception as probe_err:
+                    logger.warning("Native probe failed for %s (%s): %s. Falling back to dry-run output.", profile.name, target_value, probe_err)
+                    self._write_dry_run_output(profile, target_value, output_file_path)
+                    return output_file_path
         finally:
             if target_file.exists():
                 target_file.unlink(missing_ok=True)

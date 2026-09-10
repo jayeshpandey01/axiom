@@ -88,9 +88,11 @@ class JoernAnalyzer:
             evidence: Any,
             remediation: str | None = None,
             logs: str | None = None,
+            actual_logs: Any = None,
         ) -> None:
             nonlocal finding_id_counter
             log_entry = logs if logs is not None else f"[{code}] {title} | Evidence: {evidence}"
+            actual_log_entry = actual_logs if actual_logs is not None else log_entry
             findings.append(
                 {
                     "id": f"SEC-{finding_id_counter:03d}",
@@ -101,6 +103,8 @@ class JoernAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation or _get_remediation_for_title(title),
+                    "actual_logs": actual_log_entry,
+                    "Actual_logs": actual_log_entry,
                 }
             )
             finding_id_counter += 1
@@ -360,6 +364,8 @@ class SemgrepAnalyzer:
                     "description": message,
                     "evidence": evidence,
                     "remediation": remediation,
+                    "actual_logs": json.dumps(r, indent=2),
+                    "Actual_logs": json.dumps(r, indent=2),
                 }
             )
             finding_id_counter += 1
@@ -498,6 +504,8 @@ class TruffleHogAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation,
+                    "actual_logs": json.dumps(safe_record, indent=2),
+                    "Actual_logs": json.dumps(safe_record, indent=2),
                 }
             )
             finding_id_counter += 1
@@ -730,6 +738,8 @@ class CodeQLAnalyzer:
                         "description": description,
                         "evidence": evidence,
                         "remediation": remediation,
+                        "actual_logs": json.dumps(res, indent=2) if isinstance(res, dict) else str(res),
+                        "Actual_logs": json.dumps(res, indent=2) if isinstance(res, dict) else str(res),
                     }
                 )
                 finding_id_counter += 1

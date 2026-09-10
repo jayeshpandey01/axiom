@@ -105,6 +105,19 @@ def parse_nmap_output(output_file: Path) -> dict[str, Any]:
     if not content:
         return default_empty
 
+    records: list[dict[str, Any]] = []
+    if content.startswith("[") or content.startswith("{"):
+        try:
+            data = json.loads(content)
+            records = data if isinstance(data, list) else [data]
+            hosts_up = len({r.get("ip", "") for r in records if r.get("host_state", "open") in ("up", "open")})
+            analyzer = PortScanAnalyzer()
+            result = analyzer.analyze(records)
+            result["hosts_up"] = hosts_up
+            return result
+        except json.JSONDecodeError:
+            pass
+
     try:
         root = ET.fromstring(content)
     except ET.ParseError as exc:
