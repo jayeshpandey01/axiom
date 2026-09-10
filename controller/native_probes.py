@@ -21,7 +21,6 @@ import json
 import logging
 import re
 import socket
-import ssl
 import time
 import urllib.parse
 from dataclasses import dataclass
@@ -537,7 +536,6 @@ async def run_native_xss_scan(target: str, output_file_path: Path) -> Path:
                 resp = await client.get(base_url)
                 soup = BeautifulSoup(resp.text, "html.parser")
                 for form in soup.find_all("form"):
-                    action = form.get("action", "")
                     for inp in form.find_all(["input", "textarea"]):
                         name = inp.get("name")
                         if name:
@@ -945,7 +943,6 @@ async def run_native_dns_recon(target: str, output_file_path: Path) -> Path:
     }
 
     if HAS_DNS:
-        resolver = dns.asyncresolver.Resolver()
         resolver = dns.asyncresolver.Resolver(configure=False)
         resolver.nameservers = ["1.1.1.1", "8.8.8.8"]
         resolver.timeout = 3.0
@@ -996,7 +993,6 @@ async def run_native_subdomain_takeover(target: str, output_file_path: Path) -> 
 
     if HAS_DNS:
         try:
-            resolver = dns.asyncresolver.Resolver()
             resolver = dns.asyncresolver.Resolver(configure=False)
             resolver.nameservers = ["1.1.1.1", "8.8.8.8"]
             resolver.timeout = 3.0

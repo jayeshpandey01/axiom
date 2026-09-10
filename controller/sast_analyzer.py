@@ -104,7 +104,7 @@ class JoernAnalyzer:
                     "evidence": evidence,
                     "remediation": remediation or _get_remediation_for_title(title),
                     "actual_logs": actual_log_entry,
-                    "Actual_logs": actual_log_entry,
+
                 }
             )
             finding_id_counter += 1
@@ -365,7 +365,7 @@ class SemgrepAnalyzer:
                     "evidence": evidence,
                     "remediation": remediation,
                     "actual_logs": json.dumps(r, indent=2),
-                    "Actual_logs": json.dumps(r, indent=2),
+
                 }
             )
             finding_id_counter += 1
@@ -505,7 +505,7 @@ class TruffleHogAnalyzer:
                     "evidence": evidence,
                     "remediation": remediation,
                     "actual_logs": json.dumps(safe_record, indent=2),
-                    "Actual_logs": json.dumps(safe_record, indent=2),
+
                 }
             )
             finding_id_counter += 1
@@ -739,7 +739,7 @@ class CodeQLAnalyzer:
                         "evidence": evidence,
                         "remediation": remediation,
                         "actual_logs": json.dumps(res, indent=2) if isinstance(res, dict) else str(res),
-                        "Actual_logs": json.dumps(res, indent=2) if isinstance(res, dict) else str(res),
+
                     }
                 )
                 finding_id_counter += 1

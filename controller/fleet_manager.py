@@ -1292,7 +1292,6 @@ class FleetManager:
                     cmd = self._build_standalone_cmd(profile, target_value, target_file, output_file_path)
                     result = self._run_command(cmd, timeout=profile.default_timeout_sec)
                     valid_codes = (0, 1) if profile.name == "xss-scan" else (0,)
-                    if result.returncode in valid_codes and output_file_path.exists():
                     if result.returncode in valid_codes and output_file_path.exists() and output_file_path.stat().st_size > 0:
                         return output_file_path
                 except Exception:

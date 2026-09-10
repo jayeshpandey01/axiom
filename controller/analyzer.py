@@ -40,9 +40,8 @@ class VulnerabilityAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation,
-                    "actual_logs": actual_logs,
                     "actual_logs": actual_log_entry,
-                    "Actual_logs": actual_log_entry,
+
                 }
             )
             finding_id_counter += 1
@@ -292,9 +291,8 @@ class PortScanAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation,
-                    "actual_logs": actual_logs,
                     "actual_logs": actual_log_entry,
-                    "Actual_logs": actual_log_entry,
+
                 }
             )
             finding_id_counter += 1
@@ -444,9 +442,8 @@ class ContentDiscoveryAnalyzer:
                     "description": description,
                     "evidence": evidence,
                     "remediation": remediation,
-                    "actual_logs": actual_logs,
                     "actual_logs": actual_log_entry,
-                    "Actual_logs": actual_log_entry,
+
                 }
             )
             finding_id_counter += 1
@@ -618,7 +615,7 @@ class NucleiAnalyzer:
                     "evidence": evidence,
                     "remediation": remediation,
                     "actual_logs": json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
-                    "Actual_logs": json.dumps(record, indent=2) if isinstance(record, dict) else str(record),
+
                 }
             )
             finding_id_counter += 1
@@ -773,7 +770,7 @@ class DalfoxAnalyzer:
                     "evidence": evidence_data,
                     "remediation": remediation,
                     "actual_logs": json.dumps(record, indent=2),
-                    "Actual_logs": json.dumps(record, indent=2),
+
                 }
             )
             finding_id_counter += 1
@@ -920,7 +917,7 @@ class ZAPAnalyzer:
                     "evidence": evidence,
                     "remediation": solution,
                     "actual_logs": json.dumps(alert, indent=2) if isinstance(alert, dict) else str(alert),
-                    "Actual_logs": json.dumps(alert, indent=2) if isinstance(alert, dict) else str(alert),
+
                 }
             )
             finding_id_counter += 1
@@ -1082,7 +1079,7 @@ class InteractshAnalyzer:
                     "evidence": evidence,
                     "remediation": remediation,
                     "actual_logs": json.dumps(safe_record, indent=2),
-                    "Actual_logs": json.dumps(safe_record, indent=2),
+
                 }
             )
             finding_id_counter += 1
@@ -1145,11 +1142,10 @@ class KatanaAnalyzer:
                         "title": f"Sensitive Endpoint Discovered: {pat}",
                         "description": f"Web crawler discovered a potentially sensitive endpoint at: {endpoint}",
                         "remediation": "Verify the endpoint is intended to be publicly accessible and apply appropriate authentication.",
-                        "evidence": {"endpoint": endpoint, "pattern_matched": pat},
                         "evidence": evidence_dict,
                         "cve_ids": [],
                         "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                        "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
                     })
                     counter += 1
                     break
@@ -1213,20 +1209,17 @@ class FeroxbusterAnalyzer:
                 ferox_ev = {"url": url, "status_code": status_code}
                 findings.append({
                     "id": f"SEC-{counter:03d}",
-                    "code": f"FEROX_SENSITIVE_{severity}",
                     "code": ferox_code,
                     "logs": f"[{ferox_code}] {ferox_title} | Evidence: {ferox_ev}",
                     "severity": severity,
                     "score": score,
-                    "title": f"Sensitive Path Discovered [{status_code}]: {label}",
                     "title": ferox_title,
                     "description": f"Recursive content scan found accessible sensitive path at: {url}",
                     "remediation": "Restrict access to sensitive paths via WAF rules, authentication, or removal.",
-                    "evidence": {"url": url, "status_code": status_code},
                     "evidence": ferox_ev,
                     "cve_ids": [],
                     "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                    "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
                 })
                 counter += 1
 
@@ -1270,11 +1263,10 @@ class DNSXAnalyzer:
                             "title": f"Potentially Dangling CNAME: {c}",
                             "description": f"Host '{host}' has a CNAME pointing to '{c}' which may be claimable.",
                             "remediation": "Verify the CNAME target is still provisioned and owned. Remove or update dangling records.",
-                            "evidence": {"host": host, "cname": c},
                             "evidence": dns_ev,
                             "cve_ids": [],
                             "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                            "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
                         })
                         counter += 1
 
@@ -1294,11 +1286,10 @@ class DNSXAnalyzer:
                         "title": f"Missing SPF Record for Mail Domain: {host}",
                         "description": "Domain has MX records but no SPF TXT record, enabling email spoofing.",
                         "remediation": "Add an SPF TXT record: 'v=spf1 include:yourprovider.com ~all'.",
-                        "evidence": {"host": host, "mx": mx},
                         "evidence": spf_ev,
                         "cve_ids": [],
                         "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                        "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
                     })
                     counter += 1
 
@@ -1342,11 +1333,10 @@ class SubdomainTakeoverAnalyzer:
                     "title": f"Subdomain Takeover Vulnerability: {subdomain}",
                     "description": f"'{subdomain}' has a dangling DNS record pointing to an unclaimed '{service}' resource. An attacker can claim it.",
                     "remediation": "Remove the dangling DNS CNAME record or re-provision the missing service resource immediately.",
-                    "evidence": {"subdomain": subdomain, "service": service, "result": result},
                     "evidence": subzy_ev,
                     "cve_ids": [],
                     "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                    "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
                 })
                 counter += 1
 
@@ -1396,20 +1386,17 @@ class NaabuAnalyzer:
                 naabu_title = f"Risky Open Port {port} ({svc}) on {host}"
                 findings.append({
                     "id": f"SEC-{counter:03d}",
-                    "code": f"NAABU_RISKY_PORT_{port}",
                     "code": naabu_code,
                     "logs": f"[{naabu_code}] {naabu_title} | Evidence: {naabu_ev}",
                     "severity": sev,
                     "score": score,
-                    "title": f"Risky Open Port {port} ({svc}) on {host}",
                     "title": naabu_title,
                     "description": f"Port {port} ({svc}) is open and accessible on {host}.",
                     "remediation": "Restrict access to this port via firewall rules. Only allow from trusted IP ranges.",
-                    "evidence": {"host": host, "port": port, "service": svc},
                     "evidence": naabu_ev,
                     "cve_ids": [],
                     "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                    "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
                 })
                 counter += 1
 
@@ -1449,11 +1436,10 @@ class WAFDetectionAnalyzer:
                         "title": f"WAF Detected: {name} ({manufacturer})",
                         "description": f"Web Application Firewall '{name}' by '{manufacturer}' detected on {url}.",
                         "remediation": "Ensure WAF rules are current and tuned. Test bypass techniques regularly.",
-                        "evidence": {"url": url, "waf": name, "manufacturer": manufacturer},
                         "evidence": waf_ev,
                         "cve_ids": [],
                         "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                        "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
                     })
                     counter += 1
 
@@ -1501,7 +1487,7 @@ class CORSAnalyzer:
                 "evidence": cors_ev,
                 "cve_ids": [],
                 "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
             })
             counter += 1
 
@@ -1538,7 +1524,7 @@ class CRLFAnalyzer:
                 "evidence": crlf_ev,
                 "cve_ids": [],
                 "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
             })
             counter += 1
 
@@ -1589,7 +1575,7 @@ class SSTIAnalyzer:
                 "evidence": ssti_ev,
                 "cve_ids": [],
                 "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
             })
             counter += 1
 
@@ -1642,7 +1628,7 @@ class GitleaksAnalyzer:
                 "evidence": git_ev,
                 "cve_ids": [],
                 "actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
-                "Actual_logs": json.dumps(rec, indent=2) if isinstance(rec, dict) else str(rec),
+
             })
             counter += 1
 

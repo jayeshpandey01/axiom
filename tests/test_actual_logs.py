@@ -20,8 +20,6 @@ def test_vulnerability_analyzer_has_actual_logs():
     assert len(res["findings"]) > 0
     for f in res["findings"]:
         assert "actual_logs" in f
-        assert "Actual_logs" in f
-        assert f["actual_logs"] == f["Actual_logs"]
         assert len(str(f["actual_logs"])) > 0
 
 
@@ -31,7 +29,6 @@ def test_port_scan_analyzer_has_actual_logs():
     assert len(res["findings"]) > 0
     for f in res["findings"]:
         assert "actual_logs" in f
-        assert "Actual_logs" in f
         assert len(str(f["actual_logs"])) > 0
 
 
@@ -41,7 +38,6 @@ def test_content_discovery_analyzer_has_actual_logs():
     assert len(res["findings"]) > 0
     for f in res["findings"]:
         assert "actual_logs" in f
-        assert "Actual_logs" in f
         assert len(str(f["actual_logs"])) > 0
 
 
@@ -51,7 +47,6 @@ def test_nuclei_analyzer_has_actual_logs():
     assert len(res["findings"]) > 0
     for f in res["findings"]:
         assert "actual_logs" in f
-        assert "Actual_logs" in f
         assert len(str(f["actual_logs"])) > 0
 
 
@@ -61,7 +56,6 @@ def test_dalfox_analyzer_has_actual_logs():
     assert len(res["findings"]) > 0
     for f in res["findings"]:
         assert "actual_logs" in f
-        assert "Actual_logs" in f
         assert len(str(f["actual_logs"])) > 0
 
 
@@ -71,7 +65,6 @@ def test_zap_analyzer_has_actual_logs():
     assert len(res["findings"]) > 0
     for f in res["findings"]:
         assert "actual_logs" in f
-        assert "Actual_logs" in f
         assert len(str(f["actual_logs"])) > 0
 
 
@@ -81,7 +74,6 @@ def test_interactsh_analyzer_has_actual_logs():
     assert len(res["findings"]) > 0
     for f in res["findings"]:
         assert "actual_logs" in f
-        assert "Actual_logs" in f
         assert len(str(f["actual_logs"])) > 0
 
 
@@ -90,16 +82,13 @@ def test_sast_analyzers_have_actual_logs():
     sem_res = SemgrepAnalyzer().analyze({"results": [{"check_id": "test.rule", "path": "app.py", "extra": {"message": "Msg", "severity": "ERROR"}}]})
     assert len(sem_res["findings"]) > 0
     assert "actual_logs" in sem_res["findings"][0]
-    assert "Actual_logs" in sem_res["findings"][0]
 
     # TruffleHog
     truffle_res = TruffleHogAnalyzer().analyze([{"DetectorName": "AWS", "Verified": True, "Redacted": "AKIA***"}])
     assert len(truffle_res["findings"]) > 0
     assert "actual_logs" in truffle_res["findings"][0]
-    assert "Actual_logs" in truffle_res["findings"][0]
 
     # CodeQL
     codeql_res = CodeQLAnalyzer().analyze({"runs": [{"tool": {"driver": {"rules": [{"id": "py/test"}]}}, "results": [{"ruleId": "py/test", "message": {"text": "CodeQL finding"}}]}]})
     assert len(codeql_res["findings"]) > 0
     assert "actual_logs" in codeql_res["findings"][0]
-    assert "Actual_logs" in codeql_res["findings"][0]
